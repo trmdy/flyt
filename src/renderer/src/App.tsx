@@ -1,7 +1,8 @@
 // flyt — root shell: routing, global shortcuts, copy actions, toasts, theming.
 // Ported from the design's Root.jsx, backed by a real filesystem vault.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from 'react'
+import * as stylex from '@stylexjs/stylex'
 import type { DocPatch } from '@shared/types'
 import { EDITOR_WIDTHS } from '@shared/types'
 import { useVault } from './lib/useVault'
@@ -11,11 +12,68 @@ import { DocView } from './components/DocView'
 import { Palette, type PaletteAction } from './components/Palette'
 import { Settings } from './components/Settings'
 import { Icon } from './components/Icon'
+import { color, font, motion } from './styles/tokens.stylex'
 
 interface Toast {
   id: string
   content: ReactNode
 }
+
+const toastIn = stylex.keyframes({ from: { opacity: 0, transform: 'translateY(8px)' } })
+
+const appS = stylex.create({
+  app: {
+    height: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: color.canvas,
+    overflow: 'hidden'
+  },
+  check: { color: '#b7c89a', display: 'flex' },
+  toastWrap: {
+    position: 'fixed',
+    bottom: 26,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    alignItems: 'center',
+    zIndex: 90,
+    pointerEvents: 'none'
+  },
+  toast: {
+    backgroundColor: color.ink,
+    color: color.canvas,
+    fontSize: 12.5,
+    paddingBlock: 9,
+    paddingInline: 15,
+    borderRadius: 999,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 9,
+    boxShadow: '0 8px 28px rgba(28,25,21,.28)',
+    animationName: toastIn,
+    animationDuration: '200ms',
+    animationTimingFunction: motion.ease
+  },
+  toastKbd: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    fontFamily: font.mono,
+    fontSize: 10.5,
+    color: 'rgba(255,255,255,.8)',
+    backgroundColor: 'rgba(255,255,255,.14)',
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: 'rgba(255,255,255,.16)',
+    borderRadius: 4,
+    paddingBlock: 1,
+    paddingInline: 5,
+    lineHeight: 1.4,
+    whiteSpace: 'nowrap'
+  }
+})
 
 function hexA(hex: string, a: number): string {
   const h = (hex || '#b8862f').replace('#', '')
@@ -27,7 +85,7 @@ function hexA(hex: string, a: number): string {
 
 const checkToast = (icon: string, label: ReactNode): ReactNode => (
   <>
-    <span className="check">
+    <span {...stylex.props(appS.check)}>
       <Icon name={icon} size={14} />
     </span>{' '}
     {label}
@@ -172,7 +230,7 @@ export function App(): JSX.Element {
   const copyPath = useCallback(() => {
     const path = activeDoc ? `${vaultPath}/${activeDoc.file || 'untitled'}.md` : vaultPath
     window.flyt.copyText(path)
-    pushToast(checkToast('check', <span className="kbd">{path}</span>))
+    pushToast(checkToast('check', <span {...stylex.props(appS.toastKbd)}>{path}</span>))
   }, [activeDoc, vaultPath, pushToast])
 
   // ---------- global keyboard ----------
@@ -281,23 +339,27 @@ export function App(): JSX.Element {
   }, [])
 
   // ---------- dynamic theme from settings ----------
+  // Accent / editor width flow through CSS custom properties on the root so both
+  // StyleX styles and the remaining global CSS pick them up. Only genuinely
+  // global selectors (CodeMirror, the not-yet-migrated selection toolbar, and
+  // ::selection) need a runtime stylesheet.
   const width = EDITOR_WIDTHS[settings.editorWidth] || 760
+  const rootVars = {
+    '--accent': settings.accent,
+    '--editor-width': `${width}px`,
+    '--prose-size': `${settings.proseSize}px`
+  } as CSSProperties
   const dynCss = `
     .flyt-cm .cm-content { font-size: ${settings.proseSize}px; }
-    .editor-col { max-width: ${width}px; }
     ::selection { background: ${hexA(settings.accent, 0.2)}; }
     .st-btn.active { background: ${hexA(settings.accent, 0.16)}; }
-    .tag-add-input:focus, .path-input:focus { border-color: ${settings.accent}; }
-    .save-dot.saving .d { background: ${settings.accent}; }
-    .entry-row.row-focused { box-shadow: inset 3px 0 0 ${settings.accent}; }
     .context-item svg { color: var(--ink-3); }
-    ${settings.showPreview ? '' : '.entry-preview { display: none; }'}
   `
 
-  if (!ready) return <div className="app" />
+  if (!ready) return <div {...stylex.props(appS.app)} style={rootVars} />
 
   return (
-    <div className="app">
+    <div {...stylex.props(appS.app)} style={rootVars}>
       <style dangerouslySetInnerHTML={{ __html: dynCss }} />
 
       {view === 'home' && (
@@ -315,6 +377,7 @@ export function App(): JSX.Element {
           onArchive={archiveDoc}
           onFocusEntry={setHomeFocusId}
           onOpenVault={() => window.flyt.openVault()}
+          showPreview={settings.showPreview}
         />
       )}
 
@@ -367,9 +430,9 @@ export function App(): JSX.Element {
         />
       )}
 
-      <div className="toast-wrap">
+      <div {...stylex.props(appS.toastWrap)}>
         {toasts.map((t) => (
-          <div key={t.id} className="toast">
+          <div key={t.id} {...stylex.props(appS.toast)}>
             {t.content}
           </div>
         ))}

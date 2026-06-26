@@ -146,7 +146,7 @@ const s = stylex.create({
     transitionDuration: motion.fast,
     ':last-child': { borderBottomWidth: 1, borderBottomStyle: 'solid', borderBottomColor: color.hair }
   },
-  rowFocused: { backgroundColor: color.canvas2 },
+  rowFocused: { boxShadow: 'inset 3px 0 0 var(--accent)' },
   main: { minWidth: 0 },
   title: {
     fontFamily: font.prose,
@@ -169,6 +169,7 @@ const s = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap'
   },
+  previewHidden: { display: 'none' },
   fname: { fontFamily: font.mono, fontSize: 10.5, color: color.ink4 },
   tags: {
     display: 'flex',
@@ -244,6 +245,7 @@ interface HomeProps {
   onArchive: (id: string) => void
   onFocusEntry: (id: string | null) => void
   onOpenVault: () => void
+  showPreview: boolean
 }
 
 export function Home({
@@ -259,7 +261,8 @@ export function Home({
   onRestore,
   onArchive,
   onFocusEntry,
-  onOpenVault
+  onOpenVault,
+  showPreview
 }: HomeProps): JSX.Element {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [focusIdx, setFocusIdx] = useState(-1)
@@ -457,7 +460,7 @@ export function Home({
               >
                 <div {...stylex.props(s.main)}>
                   <div {...stylex.props(s.title)}>{d.title || 'Untitled'}</div>
-                  <div {...stylex.props(s.preview)}>{excerpt(d.body, 150) || 'Empty document'}</div>
+                  <div {...stylex.props(s.preview, !showPreview && s.previewHidden)}>{excerpt(d.body, 150) || 'Empty document'}</div>
                   <div {...stylex.props(s.fname)}>{d.file || 'untitled'}.md</div>
                 </div>
                 <div {...stylex.props(s.tags)}>

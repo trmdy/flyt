@@ -60,7 +60,7 @@ const s = stylex.create({
   },
   dot: { width: 6, height: 6, borderRadius: '50%', backgroundColor: color.moss },
   dotSaving: {
-    backgroundColor: color.ochre,
+    backgroundColor: 'var(--accent)',
     animationName: pulse,
     animationDuration: '1.2s',
     animationTimingFunction: 'ease-in-out',
@@ -68,7 +68,7 @@ const s = stylex.create({
   },
   editorScroll: { flex: '1 1 auto', overflow: 'auto' },
   editorCol: {
-    maxWidth: 760,
+    maxWidth: 'var(--editor-width, 760px)',
     marginInline: 'auto',
     width: '100%',
     paddingTop: 52,
@@ -141,7 +141,7 @@ const s = stylex.create({
     backgroundColor: color.surface,
     borderWidth: 1,
     borderStyle: 'solid',
-    borderColor: color.hairStrong,
+    borderColor: { default: color.hairStrong, ':focus': 'var(--accent)' },
     borderRadius: 999,
     paddingBlock: 3,
     paddingInline: 10,

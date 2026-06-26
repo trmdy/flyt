@@ -90,7 +90,7 @@ const s = stylex.create({
     backgroundColor: color.surfaceWarm,
     borderWidth: 1,
     borderStyle: 'solid',
-    borderColor: { default: color.hairStrong, ':focus': color.ochre },
+    borderColor: { default: color.hairStrong, ':focus': 'var(--accent)' },
     borderRadius: radius.md,
     padding: '11px 13px',
     outline: 'none'
