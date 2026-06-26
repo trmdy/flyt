@@ -14,7 +14,10 @@ export const ui = stylex.create({
     alignItems: 'center',
     gap: 14,
     paddingBlock: 0,
-    paddingInline: 20,
+    // physical left/right (not paddingInline) so the macOS titlebar rule
+    // `.is-mac .bar.doc-bar { padding-left: 80px }` wins by specificity.
+    paddingLeft: 20,
+    paddingRight: 20,
     borderBottomWidth: 1,
     borderBottomStyle: 'solid',
     borderBottomColor: color.hair,

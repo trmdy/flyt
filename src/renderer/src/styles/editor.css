@@ -23,16 +23,18 @@
 .is-mac .bar .save-dot {
   -webkit-app-region: no-drag;
 }
-/* Reserve room for the traffic lights so they never overlap controls.
-   The home bar is centered, so it only needs clearance on narrow windows
-   where the centered column reaches the left edge. The doc bar is full-width
-   with a left-aligned back button, so it always needs clearance. */
+/* Reserve room for the traffic lights so they never overlap controls. These set
+   CSS vars (not padding directly) because the bars are styled by StyleX, whose
+   :not(#\#) specificity hack would otherwise win — StyleX reads the var instead.
+   The home bar is centered, so it only needs clearance on narrow windows where
+   the centered column reaches the left edge. The doc bar is full-width with a
+   left-aligned back button, so it always needs clearance. */
 .is-mac .bar.doc-bar {
-  padding-left: 80px;
+  --doc-bar-pl: 80px;
 }
 @media (max-width: 1040px) {
   .is-mac .bar.home-bar .bar-inner {
-    padding-left: 84px;
+    --home-inner-pl: 84px;
   }
 }
 

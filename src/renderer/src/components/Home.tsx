@@ -11,12 +11,15 @@ import { color, font, radius, motion } from '../styles/tokens.stylex'
 import { ui, scrollClass, cx } from '../styles/ui.stylex'
 
 const s = stylex.create({
-  barHome: { paddingInline: 0 },
+  barHome: { paddingLeft: 0, paddingRight: 0 },
   barInner: {
     width: '100%',
     maxWidth: 940,
     marginInline: 'auto',
-    paddingInline: 32,
+    // paddingLeft via var so the macOS titlebar rule can widen it on narrow
+    // windows for the traffic lights (StyleX specificity blocks a plain override).
+    paddingLeft: 'var(--home-inner-pl, 32px)',
+    paddingRight: 32,
     display: 'flex',
     alignItems: 'center',
     gap: 14

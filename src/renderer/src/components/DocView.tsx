@@ -19,7 +19,9 @@ import { ui, scrollClass, cx } from '../styles/ui.stylex'
 const pulse = stylex.keyframes({ '50%': { opacity: 0.35 } })
 
 const s = stylex.create({
-  docBar: { gap: 0 },
+  // paddingLeft via var so the macOS titlebar rule can widen it for the traffic
+  // lights (StyleX's specificity hack blocks a plain global override).
+  docBar: { gap: 0, paddingLeft: 'var(--doc-bar-pl, 20px)' },
   side: { flex: '1 1 0', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
   sideRight: { justifyContent: 'flex-end' },
   meta: {
