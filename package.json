@@ -14,7 +14,8 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "pack:dir": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder --mac --publish never",
-    "release": "bash scripts/release.sh"
+    "release": "bash scripts/release.sh",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@base-ui-components/react": "^1.0.0-rc.0",
@@ -41,6 +42,7 @@
     "electron": "39.8.10",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "patch-package": "^8.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.6.3",

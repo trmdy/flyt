@@ -1,0 +1,34 @@
+diff --git a/node_modules/@stylexjs/unplugin/lib/core.js b/node_modules/@stylexjs/unplugin/lib/core.js
+index 96e685e..a8e3121 100644
+--- a/node_modules/@stylexjs/unplugin/lib/core.js
++++ b/node_modules/@stylexjs/unplugin/lib/core.js
+@@ -370,7 +370,11 @@ const unpluginFactory = (userOptions = {}, metaOptions) => {
+         }
+       }
+       const ctx = this;
+-      if (ctx && ctx.meta && ctx.meta.watchMode && typeof ctx.parse === 'function') {
++      // flyt patch: the eager cross-file ctx.load() below deadlocks Vite's dev
++      // plugin container (hangs serving widely-imported *.stylex files), leaving
++      // the renderer blank. Disabled in watch mode; rules are still collected
++      // when each module is transformed normally. Production (Rollup) is untouched.
++      if (false && ctx && ctx.meta && ctx.meta.watchMode && typeof ctx.parse === 'function') {
+         try {
+           const ast = ctx.parse(result.code);
+           for (const stmt of ast.body) {
+diff --git a/node_modules/@stylexjs/unplugin/lib/es/core.mjs b/node_modules/@stylexjs/unplugin/lib/es/core.mjs
+index ab666ee..8107110 100644
+--- a/node_modules/@stylexjs/unplugin/lib/es/core.mjs
++++ b/node_modules/@stylexjs/unplugin/lib/es/core.mjs
+@@ -361,7 +361,11 @@ export const unpluginFactory = (userOptions = {}, metaOptions) => {
+         }
+       }
+       const ctx = this;
+-      if (ctx && ctx.meta && ctx.meta.watchMode && typeof ctx.parse === 'function') {
++      // flyt patch: the eager cross-file ctx.load() below deadlocks Vite's dev
++      // plugin container (hangs serving widely-imported *.stylex files), leaving
++      // the renderer blank. Disabled in watch mode; rules are still collected
++      // when each module is transformed normally. Production (Rollup) is untouched.
++      if (false && ctx && ctx.meta && ctx.meta.watchMode && typeof ctx.parse === 'function') {
+         try {
+           const ast = ctx.parse(result.code);
+           for (const stmt of ast.body) {
