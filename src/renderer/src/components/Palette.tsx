@@ -218,7 +218,7 @@ export function Palette({ docs, actions, onClose, onPickDoc, onRunAction }: Pale
           <span {...stylex.props(ui.kbd)}>esc</span>
         </div>
 
-        <div {...stylex.props(s.list)} className={scrollClass(stylex.props(s.list))} ref={listRef}>
+        <div className={scrollClass(stylex.props(s.list))} ref={listRef}>
           {matchedActions.length > 0 && <div {...stylex.props(s.label)}>Actions</div>}
           {matchedActions.map((a, ai) => {
             const i = ai

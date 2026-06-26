@@ -517,10 +517,7 @@ export function DocView({
         </div>
       </div>
 
-      <div
-        {...stylex.props(s.editorScroll)}
-        className={'editor-scroll ' + scrollClass(stylex.props(s.editorScroll))}
-      >
+      <div className={'editor-scroll ' + scrollClass(stylex.props(s.editorScroll))}>
         <div {...stylex.props(s.editorCol)}>
           <div
             ref={titleRef}

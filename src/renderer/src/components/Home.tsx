@@ -383,7 +383,7 @@ export function Home({
         </div>
       </div>
 
-      <div {...stylex.props(s.homeScroll)} className={scrollClass(stylex.props(s.homeScroll))}>
+      <div className={scrollClass(stylex.props(s.homeScroll))}>
         <div {...stylex.props(s.entries)}>
           <div {...stylex.props(s.entriesHead)}>
             <div {...stylex.props(s.entriesTitle)}>{showArchived ? 'Archived' : 'Library'}</div>
