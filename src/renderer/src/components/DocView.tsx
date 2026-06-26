@@ -1,7 +1,10 @@
 // Document view: inline editable title + filename + tags, wrapping the CodeMirror
 // editor and its selection toolbar. Ported from the design's Gen-A FlytDocView.
+// Styled with StyleX; the contentEditable title keeps a global `.doc-title` class
+// (placeholder ::before + a classList focus hook), like the CodeMirror surface.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import * as stylex from '@stylexjs/stylex'
 import type { EditorView } from '@codemirror/view'
 import type { Doc, DocPatch } from '@shared/types'
 import { TOOLBAR_ACTIONS } from '@shared/types'
@@ -10,6 +13,180 @@ import { CodeMirrorEditor } from './editor/CodeMirrorEditor'
 import { SelectionToolbar } from './editor/SelectionToolbar'
 import type { Action } from './editor/markdownActions'
 import { isAutoFile, slugify, tagColor, relDate } from '../lib/md'
+import { color, font, radius, motion } from '../styles/tokens.stylex'
+import { ui, scrollClass } from '../styles/ui.stylex'
+
+const pulse = stylex.keyframes({ '50%': { opacity: 0.35 } })
+
+const s = stylex.create({
+  docBar: { gap: 0 },
+  side: { flex: '1 1 0', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
+  sideRight: { justifyContent: 'flex-end' },
+  meta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    minWidth: 0,
+    flex: '0 0 auto',
+    justifyContent: 'center'
+  },
+  fnameField: {
+    fontFamily: font.mono,
+    fontSize: 12,
+    color: { default: color.ink3, ':focus': color.ink },
+    backgroundColor: { default: 'transparent', ':hover': color.canvas2, ':focus': color.surface },
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: { default: 'transparent', ':focus': color.hairStrong },
+    borderRadius: radius.sm,
+    paddingBlock: 4,
+    paddingInline: 8,
+    outline: 'none',
+    maxWidth: 360,
+    minWidth: 80,
+    transitionProperty: 'border-color, background-color',
+    transitionTimingFunction: motion.ease,
+    transitionDuration: motion.fast
+  },
+  fnamePath: { fontFamily: font.mono, fontSize: 11, color: color.ink4, whiteSpace: 'nowrap' },
+  saveDot: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    fontFamily: font.mono,
+    fontSize: 10.5,
+    color: color.ink4,
+    whiteSpace: 'nowrap'
+  },
+  dot: { width: 6, height: 6, borderRadius: '50%', backgroundColor: color.moss },
+  dotSaving: {
+    backgroundColor: color.ochre,
+    animationName: pulse,
+    animationDuration: '1.2s',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite'
+  },
+  editorScroll: { flex: '1 1 auto', overflow: 'auto' },
+  editorCol: {
+    maxWidth: 760,
+    marginInline: 'auto',
+    width: '100%',
+    paddingTop: 52,
+    paddingInline: 40,
+    paddingBottom: 200
+  },
+  tagRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 7,
+    flexWrap: 'wrap',
+    marginTop: 0,
+    marginBottom: 30
+  },
+  tagChip: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: color.ink2,
+    backgroundColor: color.canvas2,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: color.hair,
+    borderRadius: 999,
+    paddingBlock: 3,
+    paddingRight: 6,
+    paddingLeft: 9,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 7
+  },
+  swatch: { width: 6, height: 6, borderRadius: 2 },
+  rm: {
+    width: 14,
+    height: 14,
+    borderWidth: 0,
+    borderStyle: 'none',
+    backgroundColor: { default: 'transparent', ':hover': 'rgba(182,88,56,.08)' },
+    color: { default: color.ink4, ':hover': color.rust },
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 3,
+    padding: 0
+  },
+  tagAdd: { position: 'relative' },
+  tagAddBtn: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: { default: color.ink4, ':hover': color.ink2 },
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: { default: color.hairStrong, ':hover': color.ink4 },
+    borderRadius: 999,
+    paddingBlock: 3,
+    paddingInline: 10,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    transitionProperty: 'border-color, color',
+    transitionTimingFunction: motion.ease,
+    transitionDuration: motion.fast
+  },
+  tagAddInput: {
+    fontFamily: font.mono,
+    fontSize: 11,
+    color: color.ink,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: color.hairStrong,
+    borderRadius: 999,
+    paddingBlock: 3,
+    paddingInline: 10,
+    outline: 'none',
+    width: 130
+  },
+  tagSuggest: {
+    position: 'absolute',
+    top: 'calc(100% + 6px)',
+    left: 0,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: color.hair,
+    borderRadius: radius.md,
+    boxShadow: `0 8px 28px rgba(28,25,21,.14), 0 0 0 1px ${color.hair}`,
+    padding: 4,
+    minWidth: 150,
+    zIndex: 20,
+    maxHeight: 220,
+    overflow: 'auto'
+  },
+  suggestItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    paddingBlock: 6,
+    paddingInline: 9,
+    borderRadius: radius.sm,
+    fontFamily: font.mono,
+    fontSize: 11.5,
+    color: { default: color.ink2, ':hover': color.ink },
+    cursor: 'pointer',
+    backgroundColor: { default: 'transparent', ':hover': color.canvas2 }
+  },
+  suggestItemActive: { backgroundColor: color.canvas2, color: color.ink },
+  suggestSwatch: { width: 7, height: 7, borderRadius: 2 },
+  suggestNew: {
+    marginLeft: 'auto',
+    fontSize: 9.5,
+    color: color.ink4,
+    textTransform: 'uppercase',
+    letterSpacing: '.06em'
+  }
+})
 
 interface TagEditorProps {
   docId: string
@@ -74,22 +251,22 @@ function TagEditor({ docId, tags, allTags, openSignal, onLeaveToBody, onAdd, onR
   }
 
   return (
-    <div className="tag-row">
+    <div {...stylex.props(s.tagRow)}>
       {tags.map((t) => (
-        <span key={t} className="tag-chip">
-          <span className="swatch" style={{ background: tagColor(t) }} />
+        <span key={t} {...stylex.props(s.tagChip)}>
+          <span {...stylex.props(s.swatch)} style={{ backgroundColor: tagColor(t) }} />
           {t}
-          <button className="rm" onClick={() => onRemove(t)} title="Remove tag">
+          <button {...stylex.props(s.rm)} onClick={() => onRemove(t)} title="Remove tag">
             <Icon name="x" size={11} />
           </button>
         </span>
       ))}
-      <div className="tag-add">
+      <div {...stylex.props(s.tagAdd)}>
         {adding ? (
           <>
             <input
               ref={inputRef}
-              className="tag-add-input"
+              {...stylex.props(s.tagAddInput)}
               placeholder="tag…"
               value={val}
               onChange={(e) => setVal(e.target.value)}
@@ -114,27 +291,27 @@ function TagEditor({ docId, tags, allTags, openSignal, onLeaveToBody, onAdd, onR
               }}
             />
             {suggestions.length > 0 && (
-              <div className="tag-suggest">
-                {suggestions.map((s, i) => (
+              <div {...stylex.props(s.tagSuggest)}>
+                {suggestions.map((sg, i) => (
                   <div
-                    key={s.tag + String(s.isNew)}
-                    className={'tag-suggest-item' + (i === hi ? ' active' : '')}
+                    key={sg.tag + String(sg.isNew)}
+                    {...stylex.props(s.suggestItem, i === hi && s.suggestItemActive)}
                     onMouseEnter={() => setHi(i)}
                     onMouseDown={(e) => {
                       e.preventDefault()
-                      commitContinue(s.tag)
+                      commitContinue(sg.tag)
                     }}
                   >
-                    <span className="swatch" style={{ background: tagColor(s.tag) }} />
-                    {s.tag}
-                    {s.isNew && <span className="new">create</span>}
+                    <span {...stylex.props(s.suggestSwatch)} style={{ backgroundColor: tagColor(sg.tag) }} />
+                    {sg.tag}
+                    {sg.isNew && <span {...stylex.props(s.suggestNew)}>create</span>}
                   </div>
                 ))}
               </div>
             )}
           </>
         ) : (
-          <button className="tag-add-btn" onClick={() => setAdding(true)}>
+          <button {...stylex.props(s.tagAddBtn)} onClick={() => setAdding(true)}>
             <Icon name="plus" size={11} /> tag
           </button>
         )}
@@ -190,7 +367,7 @@ export function DocView({
     const onKey = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 't') {
         e.preventDefault()
-        setTagSignal((s) => s + 1)
+        setTagSignal((sig) => sig + 1)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -286,15 +463,15 @@ export function DocView({
 
   return (
     <>
-      <div className="bar doc-bar">
-        <div className="doc-bar-side left">
-          <button className="icon-btn" onClick={onBack} title="Back to library">
+      <div {...stylex.props(ui.bar, s.docBar)}>
+        <div {...stylex.props(s.side)}>
+          <button {...stylex.props(ui.iconBtn)} onClick={onBack} title="Back to library">
             <Icon name="arrow-corner" size={17} />
           </button>
         </div>
-        <div className="doc-bar-meta">
+        <div {...stylex.props(s.meta)}>
           <input
-            className="fname-field"
+            {...stylex.props(s.fnameField)}
             value={fileDraft || ''}
             spellCheck={false}
             placeholder="untitled"
@@ -317,29 +494,29 @@ export function DocView({
             title="File name in the vault"
             style={{ width: Math.min(Math.max((fileDraft || 'untitled').length + 2, 11), 42) + 'ch' }}
           />
-          <span className="fname-path">.md</span>
+          <span {...stylex.props(s.fnamePath)}>.md</span>
         </div>
-        <div className="doc-bar-side right">
-          <div className={'save-dot' + (saving ? ' saving' : '')}>
-            <span className="d" /> {saving ? 'saving…' : 'saved'}
+        <div {...stylex.props(s.side, s.sideRight)}>
+          <div {...stylex.props(s.saveDot)}>
+            <span {...stylex.props(s.dot, saving && s.dotSaving)} /> {saving ? 'saving…' : 'saved'}
           </div>
-          <button className="icon-btn" onClick={onOpenPalette} title="Command palette (⌘K)">
+          <button {...stylex.props(ui.iconBtn)} onClick={onOpenPalette} title="Command palette (⌘K)">
             <Icon name="command" size={16} />
           </button>
           {doc.archived ? (
-            <button className="icon-btn" onClick={() => onRestore(doc.id)} title="Restore document">
+            <button {...stylex.props(ui.iconBtn)} onClick={() => onRestore(doc.id)} title="Restore document">
               <Icon name="check" size={16} />
             </button>
           ) : (
-            <button className="icon-btn" onClick={() => onArchive(doc.id)} title="Archive document">
+            <button {...stylex.props(ui.iconBtn)} onClick={() => onArchive(doc.id)} title="Archive document">
               <Icon name="archive" size={16} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="editor-scroll scroll">
-        <div className="editor-col">
+      <div {...stylex.props(s.editorScroll)} className={scrollClass(stylex.props(s.editorScroll))}>
+        <div {...stylex.props(s.editorCol)}>
           <div
             ref={titleRef}
             className={'doc-title' + (!doc.title ? ' empty-ph' : '')}
@@ -374,17 +551,17 @@ export function DocView({
 
       {view && <SelectionToolbar view={view} actions={TOOLBAR_ACTIONS as unknown as Action[]} />}
 
-      <div className="statusbar">
-        <span className="vault">
+      <div {...stylex.props(ui.statusbar)}>
+        <span {...stylex.props(ui.statusVault)}>
           <Icon name="folder" size={12} /> {vault}/{doc.file || 'untitled'}.md
         </span>
-        <span className="sep">·</span>
+        <span {...stylex.props(ui.statusSep)}>·</span>
         <span>edited {relDate(doc.modified)}</span>
-        <span style={{ marginLeft: 'auto' }} />
-        <span className="kbd">⌘C ⌘C</span>
+        <span {...stylex.props(ui.pushRight)} />
+        <span {...stylex.props(ui.kbd)}>⌘C ⌘C</span>
         <span>copy doc</span>
-        <span className="sep">·</span>
-        <span className="kbd">⇧⌘C ⇧⌘C</span>
+        <span {...stylex.props(ui.statusSep)}>·</span>
+        <span {...stylex.props(ui.kbd)}>⇧⌘C ⇧⌘C</span>
         <span>copy path</span>
       </div>
     </>
