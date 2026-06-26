@@ -352,8 +352,6 @@ export function App(): JSX.Element {
   const dynCss = `
     .flyt-cm .cm-content { font-size: ${settings.proseSize}px; }
     ::selection { background: ${hexA(settings.accent, 0.2)}; }
-    .st-btn.active { background: ${hexA(settings.accent, 0.16)}; }
-    .context-item svg { color: var(--ink-3); }
   `
 
   if (!ready) return <div {...stylex.props(appS.app)} style={rootVars} />
