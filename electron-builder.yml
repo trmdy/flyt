@@ -1,0 +1,43 @@
+appId: no.thto.flyt
+productName: Flyt
+copyright: Copyright © 2026 Tormod Haugland
+
+directories:
+  output: release
+  buildResources: build
+
+# The renderer is bundled by Vite; main/preload externalize only runtime Node deps
+# (gray-matter). electron-builder bundles "dependencies" automatically.
+files:
+  - out/**/*
+  - package.json
+
+mac:
+  category: public.app-category.productivity
+  # arm64 (Apple Silicon). Add "x64" or switch to "universal" for Intel support.
+  target:
+    - target: dmg
+      arch: arm64
+    - target: zip
+      arch: arm64
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  # Pin the "Developer ID Application: Ur Solutions AS (4QK8JBAU4V)" cert by its
+  # SHA-1 fingerprint (unambiguous — you also have an "Apple Distribution" cert
+  # with the same name). Remove this line to let electron-builder auto-discover.
+  identity: EB1F3C7588301D8A4C4C20153FA9DE1A622678F3
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+win:
+  target:
+    - nsis
+
+linux:
+  target:
+    - AppImage
+  category: Office

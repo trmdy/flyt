@@ -1,0 +1,64 @@
+// The Markdown editing surface. CodeMirror 6 holds the canonical Markdown source;
+// the livePreview extension renders it inline. Mounts once per document (keyed by id).
+
+import { useEffect, useRef } from 'react'
+import { EditorState } from '@codemirror/state'
+import { EditorView, keymap, placeholder } from '@codemirror/view'
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import type { Doc } from '@shared/types'
+import { livePreview } from './livePreview'
+import { toggleInline } from './markdownActions'
+
+interface Props {
+  doc: Doc
+  onChange: (md: string) => void
+  onViewReady: (view: EditorView | null) => void
+}
+
+export function CodeMirrorEditor({ doc, onChange, onViewReady }: Props): JSX.Element {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const onReadyRef = useRef(onViewReady)
+  onReadyRef.current = onViewReady
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+
+    const state = EditorState.create({
+      doc: doc.body || '',
+      extensions: [
+        history(),
+        keymap.of([
+          { key: 'Mod-b', run: (v) => (toggleInline(v, 'bold'), true) },
+          { key: 'Mod-i', run: (v) => (toggleInline(v, 'italic'), true) },
+          { key: 'Mod-e', run: (v) => (toggleInline(v, 'code'), true) },
+          { key: 'Shift-Mod-x', run: (v) => (toggleInline(v, 'strike'), true) },
+          ...historyKeymap,
+          ...defaultKeymap
+        ]),
+        markdown({ base: markdownLanguage }),
+        livePreview,
+        EditorView.lineWrapping,
+        placeholder('Start writing… use # for headings, - for lists, **bold**.'),
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged) onChangeRef.current(u.state.doc.toString())
+        })
+      ]
+    })
+
+    const view = new EditorView({ state, parent: host })
+    onReadyRef.current(view)
+
+    return () => {
+      onReadyRef.current(null)
+      view.destroy()
+    }
+    // The component is keyed by doc.id, so a new document remounts this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return <div className="flyt-cm" ref={hostRef} />
+}

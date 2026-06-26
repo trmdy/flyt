@@ -1,0 +1,22 @@
+node_modules
+.pnpm-store
+.DS_Store
+.env
+.env.*
+!.env.example
+
+out
+dist
+coverage
+release
+.turbo
+.vite
+*.tsbuildinfo
+
+# NB: do not ignore `build/` — it is electron-builder's buildResources dir
+# (app icon / entitlements) and must be committed.
+
+.claude/worktrees
+
+# local Claude Code config
+.claude/settings.local.json

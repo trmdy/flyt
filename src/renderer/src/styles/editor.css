@@ -1,0 +1,167 @@
+/* flyt — additions on top of the canonical app.css:
+   the CodeMirror prose surface, live-preview token styling, macOS titlebar,
+   and a couple of integration fixes. */
+
+/* Point the design's font vars at the exact family names bundled via
+   @fontsource (loads after app.css, so this :root wins), keeping the
+   original system fallbacks intact. */
+:root {
+  --ui: "Geist Sans", "Geist", -apple-system, BlinkMacSystemFont, "Inter Tight", system-ui, sans-serif;
+  --prose: "Newsreader", "Iowan Old Style", "Charter", "Georgia", serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", monospace;
+}
+
+/* ---------------- macOS hidden-inset titlebar ---------------- */
+/* The top bar doubles as the window drag handle; controls opt out. */
+.is-mac .bar {
+  -webkit-app-region: drag;
+}
+.is-mac .bar button,
+.is-mac .bar input,
+.is-mac .bar a,
+.is-mac .bar .home-search,
+.is-mac .bar .save-dot {
+  -webkit-app-region: no-drag;
+}
+/* Reserve room for the traffic lights so they never overlap controls.
+   The home bar is centered, so it only needs clearance on narrow windows
+   where the centered column reaches the left edge. The doc bar is full-width
+   with a left-aligned back button, so it always needs clearance. */
+.is-mac .bar.doc-bar {
+  padding-left: 80px;
+}
+@media (max-width: 1040px) {
+  .is-mac .bar.home-bar .bar-inner {
+    padding-left: 84px;
+  }
+}
+
+/* ---------------- CodeMirror prose surface ---------------- */
+.flyt-cm {
+  min-height: 320px;
+}
+.flyt-cm .cm-editor {
+  background: transparent;
+}
+.flyt-cm .cm-editor.cm-focused {
+  outline: none !important;
+}
+.flyt-cm .cm-scroller {
+  overflow: visible;
+  font-family: var(--prose);
+  line-height: 1.72;
+}
+.flyt-cm .cm-content {
+  font-family: var(--prose);
+  color: var(--ink);
+  font-size: 19px; /* overridden by the app's dynamic --prose-size rule */
+  line-height: 1.72;
+  font-weight: 400;
+  padding: 0;
+  caret-color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: none;
+}
+.flyt-cm .cm-line {
+  padding: 0;
+}
+.flyt-cm .cm-placeholder {
+  color: var(--ink-4);
+  font-style: normal;
+}
+/* keep the gutterless, borderless look */
+.flyt-cm .cm-gutters {
+  display: none;
+}
+.flyt-cm .cm-activeLine {
+  background: transparent;
+}
+
+/* Headings — sized relative to the prose body. */
+.flyt-cm .cm-h1 {
+  font-size: 1.7em;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.18;
+  padding-top: 18px;
+}
+.flyt-cm .cm-h2 {
+  font-size: 1.33em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  padding-top: 20px;
+}
+.flyt-cm .cm-h3 {
+  font-size: 1.08em;
+  font-weight: 600;
+  line-height: 1.3;
+  padding-top: 14px;
+}
+
+/* Block quote line. */
+.flyt-cm .cm-quote-line {
+  border-left: 2px solid var(--hair-strong);
+  padding-left: 16px;
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+/* Fenced code lines. */
+.flyt-cm .cm-codeblock-line {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  background: var(--canvas-2);
+  color: var(--ink-2);
+}
+
+/* Inline token styling (applied to the rendered content, markers hidden). */
+.flyt-cm .tok-strong {
+  font-weight: 650;
+}
+.flyt-cm .tok-em {
+  font-style: italic;
+}
+.flyt-cm .tok-strike {
+  text-decoration: line-through;
+  color: var(--ink-3);
+}
+.flyt-cm .tok-code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  background: var(--canvas-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--hair);
+}
+.flyt-cm .tok-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--ink-4);
+  cursor: text;
+}
+/* Subtle markers when a line is "open" (cursor on it) — punctuation recedes. */
+.flyt-cm .tok-mark {
+  color: var(--ink-4);
+}
+.flyt-cm .tok-list-mark {
+  color: var(--ink-4);
+}
+
+/* ---------------- migration progress fill ----------------
+   Avoid clashing with the global `.bar` top-bar rule. */
+.migrate-progress .bar-fill {
+  height: 100%;
+  background: var(--ochre);
+  border-radius: 2px;
+  width: 0;
+  transition: width 180ms linear;
+}
+
+/* The home "clear search" button sizing used by the search box. */
+.home-search .icon-btn {
+  width: 22px;
+  height: 22px;
+}
