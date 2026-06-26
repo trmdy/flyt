@@ -13,7 +13,7 @@ npm run dev
 - Uses the same vault (`~/Documents/Flyt`) and settings as the installed app.
 
 > In dev the process runs as **Electron** (bundle id `com.github.Electron`), not
-> `no.thto.flyt`. So the *installed-app* integrations — the AeroSpace float rule and
+> `com.trmdy.flyt`. So the *installed-app* integrations — the AeroSpace float rule and
 > the `open -a Flyt` (⌃⌥⌘F) shortcut — target the **installed** `/Applications/Flyt.app`,
 > not the dev instance. That's expected; just close the installed app while developing
 > if you don't want two windows.
