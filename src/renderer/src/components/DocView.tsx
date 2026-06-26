@@ -12,6 +12,7 @@ import { Icon } from './Icon'
 import { CodeMirrorEditor } from './editor/CodeMirrorEditor'
 import { SelectionToolbar } from './editor/SelectionToolbar'
 import type { Action } from './editor/markdownActions'
+import { getVimMode, setVimMode, type VimMode } from './editor/vimLite'
 import { isAutoFile, slugify, tagColor, relDate } from '../lib/md'
 import { color, font, radius, motion } from '../styles/tokens.stylex'
 import { ui, scrollClass, cx } from '../styles/ui.stylex'
@@ -187,7 +188,18 @@ const s = stylex.create({
     color: color.ink4,
     textTransform: 'uppercase',
     letterSpacing: '.06em'
-  }
+  },
+  modeTag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    fontFamily: font.mono,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: '.09em',
+    color: 'var(--accent)'
+  },
+  modeDot: { width: 5, height: 5, borderRadius: '50%', backgroundColor: 'var(--accent)' }
 })
 
 interface TagEditorProps {
@@ -350,6 +362,12 @@ export function DocView({
   const loadedId = useRef<string | null>(null)
   const [view, setView] = useState<EditorView | null>(null)
   const [tagSignal, setTagSignal] = useState(0)
+  const [vimMode, setVimModeState] = useState<VimMode>('insert')
+
+  // Each document mounts a fresh editor (keyed by id) that starts in insert mode.
+  useEffect(() => {
+    setVimModeState('insert')
+  }, [doc.id])
 
   // Filename field keeps a raw draft while focused (so spaces/caps can be typed)
   // and only slugifies on commit. While unfocused it mirrors the stored file
@@ -400,7 +418,7 @@ export function DocView({
 
   const focusBody = useCallback(() => {
     if (view) {
-      view.focus()
+      setVimMode(view, 'insert')
       view.dispatch({ selection: { anchor: 0 } })
     }
   }, [view])
@@ -422,7 +440,8 @@ export function DocView({
 
   const refocusEditor = useCallback(() => {
     if (!view) return
-    view.focus()
+    // Re-entering from the chrome resumes editing (insert mode).
+    setVimMode(view, 'insert')
     // CM keeps the last selection across blur; if the editor was never focused,
     // drop the caret at the end of the document.
     if (!everFocused.current) view.dispatch({ selection: { anchor: view.state.doc.length } })
@@ -442,7 +461,10 @@ export function DocView({
       if (e.key === 'Escape') {
         if (inEditor) {
           e.preventDefault()
-          view!.contentDOM.blur()
+          // First Esc drops from insert into block-nav (normal); a second Esc
+          // from normal leaves the editor for the chrome.
+          if (getVimMode(view!) === 'insert') setVimMode(view!, 'normal')
+          else view!.contentDOM.blur()
         } else if (inTitle) {
           e.preventDefault()
           ae!.blur()
@@ -547,6 +569,7 @@ export function DocView({
             doc={doc}
             onChange={(md) => onPatch({ body: md })}
             onViewReady={setView}
+            onModeChange={setVimModeState}
           />
         </div>
       </div>
@@ -559,6 +582,14 @@ export function DocView({
         </span>
         <span {...stylex.props(ui.statusSep)}>·</span>
         <span>edited {relDate(doc.modified)}</span>
+        {vimMode === 'normal' && (
+          <>
+            <span {...stylex.props(ui.statusSep)}>·</span>
+            <span {...stylex.props(s.modeTag)}>
+              <span {...stylex.props(s.modeDot)} /> normal
+            </span>
+          </>
+        )}
         <span {...stylex.props(ui.pushRight)} />
         <span {...stylex.props(ui.kbd)}>⌘C ⌘C</span>
         <span>copy doc</span>

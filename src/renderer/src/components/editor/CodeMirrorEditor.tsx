@@ -9,19 +9,23 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import type { Doc } from '@shared/types'
 import { livePreview } from './livePreview'
 import { toggleInline } from './markdownActions'
+import { vimLite, type VimMode } from './vimLite'
 
 interface Props {
   doc: Doc
   onChange: (md: string) => void
   onViewReady: (view: EditorView | null) => void
+  onModeChange?: (mode: VimMode) => void
 }
 
-export function CodeMirrorEditor({ doc, onChange, onViewReady }: Props): JSX.Element {
+export function CodeMirrorEditor({ doc, onChange, onViewReady, onModeChange }: Props): JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const onReadyRef = useRef(onViewReady)
   onReadyRef.current = onViewReady
+  const onModeRef = useRef(onModeChange)
+  onModeRef.current = onModeChange
 
   useEffect(() => {
     const host = hostRef.current
@@ -41,6 +45,7 @@ export function CodeMirrorEditor({ doc, onChange, onViewReady }: Props): JSX.Ele
         ]),
         markdown({ base: markdownLanguage }),
         livePreview,
+        vimLite((m) => onModeRef.current?.(m)),
         EditorView.lineWrapping,
         placeholder('Start writing… use # for headings, - for lists, **bold**.'),
         EditorView.updateListener.of((u) => {

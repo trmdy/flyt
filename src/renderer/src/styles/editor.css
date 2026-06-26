@@ -80,6 +80,18 @@
   background: transparent;
 }
 
+/* ---------------- light vim mode ---------------- */
+/* Normal mode: no caret (the block highlight is the cursor). */
+.cm-vim-normal .cm-content {
+  caret-color: transparent;
+}
+/* The current block — a faint accent wash + an accent left bar, echoing the
+   focused-row indicator in the library. */
+.cm-vim-block {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 /* Headings — sized relative to the prose body. */
 .flyt-cm .cm-h1 {
   font-size: 1.7em;
