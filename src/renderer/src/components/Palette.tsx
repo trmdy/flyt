@@ -1,9 +1,113 @@
 // ⌘K command palette — unified action list + document search. Ported from Gen-A FlytPalette.
+// Styled with StyleX. The overlay keeps a global `.scrim` class: other views detect
+// an open palette via document.querySelector('.scrim').
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import * as stylex from '@stylexjs/stylex'
 import type { Doc } from '@shared/types'
 import { Icon } from './Icon'
 import { relDate } from '../lib/md'
+import { color, font, radius, motion } from '../styles/tokens.stylex'
+import { ui, scrollClass } from '../styles/ui.stylex'
+
+const pop = stylex.keyframes({ from: { opacity: 0, transform: 'translateY(-6px) scale(.99)' } })
+
+const s = stylex.create({
+  palette: {
+    width: 600,
+    maxWidth: 'calc(100vw - 60px)',
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    boxShadow: `0 1px 0 rgba(0,0,0,.04), 0 18px 50px rgba(28,25,21,.22), 0 0 0 1px ${color.hair}`,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    animationName: pop,
+    animationDuration: '140ms',
+    animationTimingFunction: motion.ease
+  },
+  inputRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 11,
+    paddingBlock: 15,
+    paddingInline: 18,
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid',
+    borderBottomColor: color.hair,
+    color: color.ink3
+  },
+  input: {
+    borderWidth: 0,
+    borderStyle: 'none',
+    outline: 0,
+    backgroundColor: 'transparent',
+    fontSize: 15.5,
+    flex: 1,
+    color: color.ink,
+    letterSpacing: '-0.005em',
+    '::placeholder': { color: color.ink4 }
+  },
+  list: { paddingTop: 5, paddingBottom: 8, maxHeight: '50vh', overflow: 'auto' },
+  label: {
+    fontFamily: font.mono,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: '.08em',
+    color: color.ink4,
+    paddingTop: 10,
+    paddingBottom: 5,
+    paddingInline: 18
+  },
+  item: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    paddingBlock: 9,
+    paddingInline: 18,
+    cursor: 'pointer',
+    fontSize: 14,
+    color: color.ink,
+    letterSpacing: '-0.005em',
+    backgroundColor: 'transparent'
+  },
+  itemActive: { backgroundColor: color.canvas2 },
+  ico: { color: color.ink3, display: 'flex', flex: '0 0 auto' },
+  piMain: { minWidth: 0, flex: '1 1 auto', overflow: 'hidden' },
+  piTitle: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  piSub: {
+    fontFamily: font.mono,
+    fontSize: 10.5,
+    color: color.ink4,
+    marginTop: 2,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  meta: {
+    marginLeft: 'auto',
+    fontFamily: font.mono,
+    fontSize: 10.5,
+    color: color.ink4,
+    flex: '0 0 auto'
+  },
+  foot: {
+    display: 'flex',
+    alignItems: 'center',
+    paddingBlock: 9,
+    paddingInline: 16,
+    gap: 16,
+    borderTopWidth: 1,
+    borderTopStyle: 'solid',
+    borderTopColor: color.hair,
+    fontFamily: font.mono,
+    fontSize: 10.5,
+    color: color.ink4,
+    backgroundColor: color.surfaceWarm
+  },
+  hint: { display: 'inline-flex', alignItems: 'center', gap: 6 },
+  empty: { paddingBlock: 28, paddingInline: 18, textAlign: 'center', color: color.ink4, fontSize: 13 }
+})
 
 export interface PaletteAction {
   id: string
@@ -67,7 +171,7 @@ export function Palette({ docs, actions, onClose, onPickDoc, onRunAction }: Pale
     setHi(0)
   }, [q])
   useEffect(() => {
-    const el = listRef.current?.querySelector('.palette-item.active') as HTMLElement | null
+    const el = listRef.current?.querySelector('[data-active]') as HTMLElement | null
     el?.scrollIntoView({ block: 'nearest' })
   }, [hi])
 
@@ -93,9 +197,6 @@ export function Palette({ docs, actions, onClose, onPickDoc, onRunAction }: Pale
     }
   }
 
-  let idx = -1
-  const rowIndex = (): number => ++idx
-
   return (
     <div
       className="scrim"
@@ -103,88 +204,91 @@ export function Palette({ docs, actions, onClose, onPickDoc, onRunAction }: Pale
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="palette" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="palette-input">
+      <div {...stylex.props(s.palette)} onMouseDown={(e) => e.stopPropagation()}>
+        <div {...stylex.props(s.inputRow)}>
           <Icon name="search" size={17} />
           <input
+            {...stylex.props(s.input)}
             ref={inputRef}
             value={q}
             placeholder="Search documents or run a command…"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={onKey}
           />
-          <span className="kbd">esc</span>
+          <span {...stylex.props(ui.kbd)}>esc</span>
         </div>
 
-        <div className="palette-list scroll" ref={listRef}>
-          {matchedActions.length > 0 && <div className="palette-label">Actions</div>}
-          {matchedActions.map((a) => {
-            const i = rowIndex()
+        <div {...stylex.props(s.list)} className={scrollClass(stylex.props(s.list))} ref={listRef}>
+          {matchedActions.length > 0 && <div {...stylex.props(s.label)}>Actions</div>}
+          {matchedActions.map((a, ai) => {
+            const i = ai
             return (
               <div
                 key={a.id}
-                className={'palette-item' + (i === hi ? ' active' : '')}
+                {...stylex.props(s.item, i === hi && s.itemActive)}
+                data-active={i === hi || undefined}
                 onMouseEnter={() => setHi(i)}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   onRunAction(a)
                 }}
               >
-                <span className="ico">
+                <span {...stylex.props(s.ico)}>
                   <Icon name={a.icon} size={16} />
                 </span>
-                <div className="pi-main">
-                  <div className="pi-title">{a.label}</div>
+                <div {...stylex.props(s.piMain)}>
+                  <div {...stylex.props(s.piTitle)}>{a.label}</div>
                 </div>
-                {a.shortcut && <span className="meta">{a.shortcut}</span>}
+                {a.shortcut && <span {...stylex.props(s.meta)}>{a.shortcut}</span>}
               </div>
             )
           })}
 
-          {matchedDocs.length > 0 && <div className="palette-label">{query ? 'Documents' : 'Recent'}</div>}
-          {matchedDocs.map((d) => {
-            const i = rowIndex()
+          {matchedDocs.length > 0 && (
+            <div {...stylex.props(s.label)}>{query ? 'Documents' : 'Recent'}</div>
+          )}
+          {matchedDocs.map((d, di) => {
+            const i = matchedActions.length + di
             return (
               <div
                 key={d.id}
-                className={'palette-item' + (i === hi ? ' active' : '')}
+                {...stylex.props(s.item, i === hi && s.itemActive)}
+                data-active={i === hi || undefined}
                 onMouseEnter={() => setHi(i)}
                 onMouseDown={(e) => {
                   e.preventDefault()
                   onPickDoc(d.id)
                 }}
               >
-                <span className="ico">
+                <span {...stylex.props(s.ico)}>
                   <Icon name="doc" size={16} />
                 </span>
-                <div className="pi-main">
-                  <div className="pi-title">{d.title || 'Untitled'}</div>
-                  <div className="pi-sub">
+                <div {...stylex.props(s.piMain)}>
+                  <div {...stylex.props(s.piTitle)}>{d.title || 'Untitled'}</div>
+                  <div {...stylex.props(s.piSub)}>
                     {(d.file || 'untitled') + '.md'}
                     {d.tags && d.tags.length ? '  ·  ' + d.tags.join(', ') : ''}
                   </div>
                 </div>
-                <span className="meta">{relDate(d.modified)}</span>
+                <span {...stylex.props(s.meta)}>{relDate(d.modified)}</span>
               </div>
             )
           })}
 
-          {flat.length === 0 && <div className="palette-empty">No matches for “{q}”.</div>}
+          {flat.length === 0 && <div {...stylex.props(s.empty)}>No matches for “{q}”.</div>}
         </div>
 
-        <div className="palette-foot">
-          <span className="hint">
-            <span className="kbd">↑↓</span> navigate
+        <div {...stylex.props(s.foot)}>
+          <span {...stylex.props(s.hint)}>
+            <span {...stylex.props(ui.kbd)}>↑↓</span> navigate
           </span>
-          <span className="hint">
-            <span className="kbd">↵</span> open
+          <span {...stylex.props(s.hint)}>
+            <span {...stylex.props(ui.kbd)}>↵</span> open
           </span>
-          <span className="hint">
-            <span className="kbd">esc</span> dismiss
+          <span {...stylex.props(s.hint)}>
+            <span {...stylex.props(ui.kbd)}>esc</span> dismiss
           </span>
-          <span style={{ marginLeft: 'auto' }} className="hint">
-            {docs.length} documents
-          </span>
+          <span {...stylex.props(s.hint, ui.pushRight)}>{docs.length} documents</span>
         </div>
       </div>
     </div>
