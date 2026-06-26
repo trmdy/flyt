@@ -14,7 +14,7 @@ import { SelectionToolbar } from './editor/SelectionToolbar'
 import type { Action } from './editor/markdownActions'
 import { isAutoFile, slugify, tagColor, relDate } from '../lib/md'
 import { color, font, radius, motion } from '../styles/tokens.stylex'
-import { ui, scrollClass } from '../styles/ui.stylex'
+import { ui, scrollClass, cx } from '../styles/ui.stylex'
 
 const pulse = stylex.keyframes({ '50%': { opacity: 0.35 } })
 
@@ -463,7 +463,7 @@ export function DocView({
 
   return (
     <>
-      <div {...stylex.props(ui.bar, s.docBar)}>
+      <div className={cx(stylex.props(ui.bar, s.docBar), 'bar', 'doc-bar')}>
         <div {...stylex.props(s.side)}>
           <button {...stylex.props(ui.iconBtn)} onClick={onBack} title="Back to library">
             <Icon name="arrow-corner" size={17} />
@@ -497,7 +497,7 @@ export function DocView({
           <span {...stylex.props(s.fnamePath)}>.md</span>
         </div>
         <div {...stylex.props(s.side, s.sideRight)}>
-          <div {...stylex.props(s.saveDot)}>
+          <div className={cx(stylex.props(s.saveDot), 'save-dot')}>
             <span {...stylex.props(s.dot, saving && s.dotSaving)} /> {saving ? 'saving…' : 'saved'}
           </div>
           <button {...stylex.props(ui.iconBtn)} onClick={onOpenPalette} title="Command palette (⌘K)">
@@ -515,7 +515,10 @@ export function DocView({
         </div>
       </div>
 
-      <div {...stylex.props(s.editorScroll)} className={scrollClass(stylex.props(s.editorScroll))}>
+      <div
+        {...stylex.props(s.editorScroll)}
+        className={'editor-scroll ' + scrollClass(stylex.props(s.editorScroll))}
+      >
         <div {...stylex.props(s.editorCol)}>
           <div
             ref={titleRef}

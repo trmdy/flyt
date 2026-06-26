@@ -1,4 +1,4 @@
-// Shared icon set (ported from the design's bits.jsx) plus the flyt mark and Kbd.
+// Shared icon set (ported from the design's bits.jsx) plus the flyt mark.
 
 import type { CSSProperties } from 'react'
 
@@ -171,13 +171,5 @@ export function FlytMark({ size = 18 }: { size?: number }): JSX.Element {
       <path d="M7 21V8a5 5 0 0 1 5-5h4M5 13h9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <circle cx="17.5" cy="6" r="1.6" fill="currentColor" />
     </svg>
-  )
-}
-
-export function Kbd({ children, style }: { children: React.ReactNode; style?: CSSProperties }): JSX.Element {
-  return (
-    <span className="kbd" style={style}>
-      {children}
-    </span>
   )
 }

@@ -8,7 +8,7 @@ import { Icon } from './Icon'
 import { ContextMenu } from './ContextMenu'
 import { excerpt, relDate, tagColor } from '../lib/md'
 import { color, font, radius, motion } from '../styles/tokens.stylex'
-import { ui, scrollClass } from '../styles/ui.stylex'
+import { ui, scrollClass, cx } from '../styles/ui.stylex'
 
 const s = stylex.create({
   barHome: { paddingInline: 0 },
@@ -169,6 +169,7 @@ const s = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap'
   },
+  searchClear: { width: 22, height: 22 },
   previewHidden: { display: 'none' },
   fname: { fontFamily: font.mono, fontSize: 10.5, color: color.ink4 },
   tags: {
@@ -356,9 +357,9 @@ export function Home({
 
   return (
     <>
-      <div {...stylex.props(ui.bar, s.barHome)}>
-        <div {...stylex.props(s.barInner)}>
-          <div {...stylex.props(s.search)}>
+      <div className={cx(stylex.props(ui.bar, s.barHome), 'bar', 'home-bar')}>
+        <div className={cx(stylex.props(s.barInner), 'bar-inner')}>
+          <div className={cx(stylex.props(s.search), 'home-search')}>
             <Icon name="search" size={15} />
             <input
               {...stylex.props(s.searchInput)}
@@ -368,7 +369,7 @@ export function Home({
               onChange={(e) => setQuery(e.target.value)}
             />
             {query && (
-              <button {...stylex.props(ui.iconBtn)} onClick={() => setQuery('')} aria-label="Clear search">
+              <button {...stylex.props(ui.iconBtn, s.searchClear)} onClick={() => setQuery('')} aria-label="Clear search">
                 <Icon name="x" size={13} />
               </button>
             )}

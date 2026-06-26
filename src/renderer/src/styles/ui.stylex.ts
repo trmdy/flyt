@@ -107,7 +107,11 @@ export const ui = stylex.create({
   pushRight: { marginLeft: 'auto' }
 })
 
-// The webkit-scrollbar styling stays as a global `.scroll` class in app.css;
-// components append it next to their StyleX className via `scrollClass`.
-export const scrollClass = (sx: { className?: string }): string =>
-  ['scroll', sx.className].filter(Boolean).join(' ')
+// Merge a StyleX props object's className with extra global utility/hook classes
+// (e.g. `.scroll` webkit-scrollbar, or the `.bar`/`.doc-bar` hooks the macOS
+// titlebar CSS keys off). StyleX styles carry no inline vars on these elements,
+// so only the className needs merging.
+export const cx = (sx: { className?: string }, ...names: string[]): string =>
+  [...names, sx.className].filter(Boolean).join(' ')
+
+export const scrollClass = (sx: { className?: string }): string => cx(sx, 'scroll')
