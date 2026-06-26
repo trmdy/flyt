@@ -151,21 +151,11 @@ Verify: `xcrun stapler validate "release/mac-arm64/Flyt.app"` and
 
 ## CI & releasing
 
-**CI** (`.github/workflows/ci.yml`) runs on every push/PR: typecheck + an *unsigned*
-build, uploading a test DMG as a workflow artifact. No secrets, no signing key on
-GitHub.
+- **Develop** with hot reload: `npm run dev` — no rebuild/signing per change.
+- **Release** a signed + notarized build to GitHub: `npm run release -- <version>`.
+- **CI** typechecks + builds (unsigned) on every push.
 
-**Releases are cut locally**, because notarization needs the Developer ID key, which
-never leaves this Mac:
-
-```bash
-npm run release -- 0.2.0
-```
-
-That one command bumps the version, builds + signs + notarizes + staples the app and
-DMG (the app-specific password is pulled from Hem at
-`project/flyt/app-specific-password`), tags `v0.2.0`, pushes, and publishes a GitHub
-Release with the signed `.dmg` + `.zip`. See [`scripts/release.sh`](./scripts/release.sh).
+Full workflow, prerequisites, and verification steps: **[RELEASING.md](./RELEASING.md)**.
 
 ## Tech
 
