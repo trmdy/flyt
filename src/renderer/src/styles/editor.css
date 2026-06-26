@@ -86,10 +86,15 @@
   caret-color: transparent;
 }
 /* The current block — a faint accent wash + an accent left bar, echoing the
-   focused-row indicator in the library. */
+   focused-row indicator in the library. The negative margin + matching padding
+   pull the bar into the left gutter so it doesn't hug the text, while keeping
+   the text itself in place (no shift when the highlight appears). */
 .cm-vim-block {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   box-shadow: inset 2px 0 0 var(--accent);
+  margin-left: -18px;
+  padding-left: 18px;
+  border-radius: 0 3px 3px 0;
 }
 
 /* Headings — sized relative to the prose body. */

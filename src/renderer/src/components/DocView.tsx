@@ -362,11 +362,11 @@ export function DocView({
   const loadedId = useRef<string | null>(null)
   const [view, setView] = useState<EditorView | null>(null)
   const [tagSignal, setTagSignal] = useState(0)
-  const [vimMode, setVimModeState] = useState<VimMode>('insert')
+  const [vimMode, setVimModeState] = useState<VimMode>('normal')
 
-  // Each document mounts a fresh editor (keyed by id) that starts in insert mode.
+  // Each document mounts a fresh editor (keyed by id) that starts in normal mode.
   useEffect(() => {
-    setVimModeState('insert')
+    setVimModeState('normal')
   }, [doc.id])
 
   // Filename field keeps a raw draft while focused (so spaces/caps can be typed)

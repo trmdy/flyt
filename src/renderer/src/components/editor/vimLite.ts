@@ -18,27 +18,47 @@ import { EditorView, Decoration, type DecorationSet, keymap } from '@codemirror/
 export type VimMode = 'normal' | 'insert'
 
 const setModeEffect = StateEffect.define<VimMode>()
+// Whether a block is "focused" yet. A freshly opened doc starts in normal mode
+// but unfocused (no highlight); the first movement lands on the top block.
+const setFocusedEffect = StateEffect.define<boolean>()
 
 const modeField = StateField.define<VimMode>({
-  create: () => 'insert',
+  create: () => 'normal',
   update(value, tr) {
     for (const e of tr.effects) if (e.is(setModeEffect)) return e.value
     return value
   }
 })
 
+const focusedField = StateField.define<boolean>({
+  create: () => false,
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setFocusedEffect)) return e.value
+    return value
+  }
+})
+
 export function getVimMode(view: EditorView): VimMode {
-  return view.state.field(modeField, false) ?? 'insert'
+  return view.state.field(modeField, false) ?? 'normal'
+}
+
+function isFocused(view: EditorView): boolean {
+  return view.state.field(focusedField, false) ?? false
 }
 
 export function setVimMode(view: EditorView, mode: VimMode): void {
-  view.dispatch({ effects: setModeEffect.of(mode) })
+  // Entering normal mode from insert (via Esc) highlights the cursor's block.
+  const effects = mode === 'normal' ? [setModeEffect.of(mode), setFocusedEffect.of(true)] : [setModeEffect.of(mode)]
+  view.dispatch({ effects })
   if (mode === 'insert') view.focus()
 }
 
 // ——— blocks ———
 
 const isBlank = (t: string): boolean => /^\s*$/.test(t)
+// A heading is its own block and breaks the blocks on either side of it, so a
+// paragraph immediately followed by a heading (no blank line) splits correctly.
+const isHeading = (t: string): boolean => /^#{1,6}\s/.test(t)
 
 // Snap a (possibly blank) line to the nearest non-blank line — below first, then
 // above — so navigation never lands on the gaps between blocks.
@@ -53,10 +73,21 @@ function snapLine(state: EditorState, lineNo: number): number {
 function blockBounds(state: EditorState, lineNo: number): { first: number; last: number } {
   const doc = state.doc
   const ln = snapLine(state, lineNo)
+  // A heading line is a block of exactly itself.
+  if (isHeading(doc.line(ln).text)) return { first: ln, last: ln }
+  // Otherwise expand over contiguous lines, stopping at blanks or headings.
   let first = ln
   let last = ln
-  while (first > 1 && !isBlank(doc.line(first - 1).text)) first--
-  while (last < doc.lines && !isBlank(doc.line(last + 1).text)) last++
+  while (first > 1) {
+    const t = doc.line(first - 1).text
+    if (isBlank(t) || isHeading(t)) break
+    first--
+  }
+  while (last < doc.lines) {
+    const t = doc.line(last + 1).text
+    if (isBlank(t) || isHeading(t)) break
+    last++
+  }
   return { first, last }
 }
 
@@ -86,7 +117,7 @@ function prevBlockStart(state: EditorState, lineNo: number): number {
 const blockLine = Decoration.line({ class: 'cm-vim-block' })
 
 function buildHighlight(state: EditorState): DecorationSet {
-  if (state.field(modeField) !== 'normal') return Decoration.none
+  if (state.field(modeField) !== 'normal' || !state.field(focusedField)) return Decoration.none
   const { first, last } = currentBlock(state)
   const b = new RangeSetBuilder<Decoration>()
   for (let i = first; i <= last; i++) b.add(state.doc.line(i).from, state.doc.line(i).from, blockLine)
@@ -96,7 +127,11 @@ function buildHighlight(state: EditorState): DecorationSet {
 const highlight = StateField.define<DecorationSet>({
   create: (state) => buildHighlight(state),
   update(value, tr) {
-    if (tr.docChanged || tr.selection || tr.effects.some((e) => e.is(setModeEffect)))
+    if (
+      tr.docChanged ||
+      tr.selection ||
+      tr.effects.some((e) => e.is(setModeEffect) || e.is(setFocusedEffect))
+    )
       return buildHighlight(tr.state)
     return value
   },
@@ -134,10 +169,26 @@ function gotoLine(view: EditorView, lineNo: number): void {
   revealPos(view, pos)
 }
 
+// First non-blank block at the top of the document.
+function topBlockFirstLine(state: EditorState): number {
+  return blockBounds(state, snapLine(state, 1)).first
+}
+
+// Land on (focus) the top block — the first movement in a freshly opened doc.
+function focusTop(view: EditorView, reveal = true): void {
+  const pos = view.state.doc.line(topBlockFirstLine(view.state)).from
+  view.dispatch({ selection: { anchor: pos }, effects: setFocusedEffect.of(true) })
+  if (reveal) revealPos(view, pos)
+}
+
 // ——— commands ———
 
 const moveDown = (view: EditorView): boolean => {
   if (getVimMode(view) !== 'normal') return false
+  if (!isFocused(view)) {
+    focusTop(view) // first press just lands on the top block
+    return true
+  }
   const nx = nextBlockStart(view.state, currentBlock(view.state).first)
   if (nx > 0) gotoLine(view, nx)
   return true
@@ -145,6 +196,10 @@ const moveDown = (view: EditorView): boolean => {
 
 const moveUp = (view: EditorView): boolean => {
   if (getVimMode(view) !== 'normal') return false
+  if (!isFocused(view)) {
+    focusTop(view)
+    return true
+  }
   const pv = prevBlockStart(view.state, currentBlock(view.state).first)
   if (pv > 0) gotoLine(view, pv)
   return true
@@ -163,6 +218,8 @@ const insertAt = (view: EditorView, where: 'start' | 'end'): boolean => {
 
 const halfPage = (view: EditorView, dir: 1 | -1): boolean => {
   if (getVimMode(view) !== 'normal') return false
+  // Ctrl-d/u immediately: assume the top block was focused, then apply.
+  if (!isFocused(view)) focusTop(view, false)
   const sc = outerScroller(view)
   if (!sc) {
     // No scroller — just hop a few blocks.
@@ -187,8 +244,11 @@ const vimKeymap = Prec.highest(
   keymap.of([
     { key: 'j', run: moveDown },
     { key: 'k', run: moveUp },
+    { key: 'ArrowDown', run: moveDown },
+    { key: 'ArrowUp', run: moveUp },
     { key: 'i', run: (v) => insertAt(v, 'start') },
     { key: 'a', run: (v) => insertAt(v, 'end') },
+    { key: 'Enter', run: (v) => insertAt(v, 'end') },
     { key: 'Ctrl-d', run: (v) => halfPage(v, 1) },
     { key: 'Ctrl-u', run: (v) => halfPage(v, -1) }
   ])
@@ -212,7 +272,7 @@ export function vimLite(onModeChange?: (mode: VimMode) => void): Extension {
   const notify = EditorView.updateListener.of((u) => {
     const before = u.startState.field(modeField, false)
     const after = u.state.field(modeField, false)
-    if (before !== after && onModeChange) onModeChange(after ?? 'insert')
+    if (before !== after && onModeChange) onModeChange(after ?? 'normal')
   })
-  return [modeField, highlight, readOnly, editorClass, vimKeymap, mouseToInsert, notify]
+  return [modeField, focusedField, highlight, readOnly, editorClass, vimKeymap, mouseToInsert, notify]
 }

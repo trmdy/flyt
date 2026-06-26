@@ -56,6 +56,9 @@ export function CodeMirrorEditor({ doc, onChange, onViewReady, onModeChange }: P
 
     const view = new EditorView({ state, parent: host })
     onReadyRef.current(view)
+    // Focus the editor so it opens ready for vim normal-mode navigation. (Block
+    // edits are locked until insert mode, so this never captures stray typing.)
+    view.focus()
 
     return () => {
       onReadyRef.current(null)
