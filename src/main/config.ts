@@ -7,9 +7,18 @@ import { homedir } from 'node:os'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
 
+export interface WindowBounds {
+  x?: number
+  y?: number
+  width: number
+  height: number
+}
+
 interface RawConfig extends Settings {
   /** Absolute vault paths that have already been offered seed documents. */
   seededVaults?: string[]
+  /** Last window size/position, so the app reopens roughly where you left it. */
+  windowBounds?: WindowBounds
 }
 
 function configPath(): string {
@@ -79,4 +88,12 @@ export function seededVaults(): string[] {
 export function markSeeded(absPath: string): void {
   const cur = seededVaults()
   if (!cur.includes(absPath)) saveRaw({ seededVaults: [...cur, absPath] })
+}
+
+export function loadWindowBounds(): WindowBounds | null {
+  return loadRaw().windowBounds ?? null
+}
+
+export function saveWindowBounds(bounds: WindowBounds): void {
+  saveRaw({ windowBounds: bounds })
 }
