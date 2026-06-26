@@ -54,6 +54,7 @@ export function App(): JSX.Element {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [homeFocusId, setHomeFocusId] = useState<string | null>(null)
 
   const searchRef = useRef<HTMLInputElement>(null)
   const savingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,17 +73,34 @@ export function App(): JSX.Element {
     setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), 1900)
   }, [])
 
-  const openDoc = useCallback((id: string) => {
-    setActiveId(id)
-    setView('doc')
-    setPaletteOpen(false)
-  }, [])
+  // ---------- navigation + history (⌘← goes back) ----------
+  const navRef = useRef<{ view: 'home' | 'doc'; activeId: string | null }>({ view, activeId })
+  navRef.current = { view, activeId }
+  const historyRef = useRef<Array<{ view: 'home' | 'doc'; activeId: string | null }>>([])
 
-  const goHome = useCallback(() => {
-    setView('home')
-    setActiveId(null)
-    setPaletteOpen(false)
-  }, [])
+  const navigate = useCallback(
+    (next: { view: 'home' | 'doc'; activeId: string | null }, record = true) => {
+      if (record) {
+        const cur = navRef.current
+        if (cur.view !== next.view || cur.activeId !== next.activeId) {
+          historyRef.current.push(cur)
+          if (historyRef.current.length > 50) historyRef.current.shift()
+        }
+      }
+      setPaletteOpen(false)
+      setView(next.view)
+      setActiveId(next.activeId)
+    },
+    []
+  )
+
+  const openDoc = useCallback((id: string) => navigate({ view: 'doc', activeId: id }), [navigate])
+  const goHome = useCallback(() => navigate({ view: 'home', activeId: null }), [navigate])
+  const goBack = useCallback(() => {
+    const prev = historyRef.current.pop()
+    if (prev) navigate(prev, false)
+    else if (navRef.current.view === 'doc') navigate({ view: 'home', activeId: null }, false)
+  }, [navigate])
 
   const createDoc = useCallback(async () => {
     const id = await vaultCreate()
@@ -96,8 +114,8 @@ export function App(): JSX.Element {
 
   // Safety: if the active document vanishes, return to the library.
   useEffect(() => {
-    if (view === 'doc' && activeId && !activeDoc) goHome()
-  }, [view, activeId, activeDoc, goHome])
+    if (view === 'doc' && activeId && !activeDoc) navigate({ view: 'home', activeId: null }, false)
+  }, [view, activeId, activeDoc, navigate])
 
   const patchDoc = useCallback(
     (patch: DocPatch) => {
@@ -113,23 +131,23 @@ export function App(): JSX.Element {
   const deleteDoc = useCallback(
     (id: string) => {
       vaultDelete(id)
-      goHome()
+      navigate({ view: 'home', activeId: null }, false)
       pushToast(
         <>
           <Icon name="x" size={14} /> Document deleted
         </>
       )
     },
-    [vaultDelete, goHome, pushToast]
+    [vaultDelete, navigate, pushToast]
   )
 
   const archiveDoc = useCallback(
     (id: string) => {
       vaultUpdate(id, { archived: true })
-      goHome()
+      navigate({ view: 'home', activeId: null }, false)
       pushToast(checkToast('archive', 'Document archived'))
     },
-    [vaultUpdate, goHome, pushToast]
+    [vaultUpdate, navigate, pushToast]
   )
 
   const restoreDoc = useCallback(
@@ -141,11 +159,9 @@ export function App(): JSX.Element {
   )
 
   const toggleArchived = useCallback(() => {
-    setView('home')
-    setActiveId(null)
-    setPaletteOpen(false)
+    navigate({ view: 'home', activeId: null })
     setShowArchived((v) => !v)
-  }, [])
+  }, [navigate])
 
   const copyDocument = useCallback(() => {
     if (!activeDoc) return
@@ -200,6 +216,16 @@ export function App(): JSX.Element {
         }
         return
       }
+      // ⌘← navigates history back — but not while editing text (there it's line-start).
+      if (mod && !e.shiftKey && e.key === 'ArrowLeft') {
+        const ae = document.activeElement as HTMLElement | null
+        const editable = !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)
+        if (!editable) {
+          e.preventDefault()
+          goBack()
+        }
+        return
+      }
       if (e.key === '/' && view === 'home' && document.activeElement === document.body) {
         e.preventDefault()
         searchRef.current?.focus()
@@ -211,7 +237,7 @@ export function App(): JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [view, paletteOpen, settingsOpen, createDoc, copyDocument, copyPath, toggleArchived])
+  }, [view, paletteOpen, settingsOpen, createDoc, copyDocument, copyPath, toggleArchived, goBack])
 
   // ---------- palette actions ----------
   const paletteActions = useMemo<PaletteAction[]>(() => {
@@ -233,8 +259,21 @@ export function App(): JSX.Element {
       { id: 'archived', label: showArchived ? 'View active documents' : 'View archived documents', icon: 'archive', shortcut: '⇧⌘A', keywords: 'archive trash hidden', run: () => toggleArchived() },
       { id: 'vault', label: 'Vault settings…', icon: 'settings', keywords: 'location migrate folder path', run: () => setSettingsOpen(true) }
     )
+    // When a library entry is focused, its actions go to the very top.
+    if (view === 'home' && homeFocusId) {
+      const d = docs.find((x) => x.id === homeFocusId)
+      if (d) {
+        const title = d.title || 'Untitled'
+        a.unshift(
+          { id: 'open-focused', label: `Open “${title}”`, icon: 'arrow-corner', keywords: 'open entry', run: () => openDoc(d.id) },
+          d.archived
+            ? { id: 'restore-focused', label: `Restore “${title}”`, icon: 'check', keywords: 'restore unarchive', run: () => restoreDoc(d.id) }
+            : { id: 'archive-focused', label: `Archive “${title}”`, icon: 'archive', keywords: 'archive hide', run: () => archiveDoc(d.id) }
+        )
+      }
+    }
     return a
-  }, [view, activeDoc, showArchived, createDoc, copyDocument, copyPath, goHome, restoreDoc, archiveDoc, deleteDoc, toggleArchived])
+  }, [view, activeDoc, showArchived, homeFocusId, docs, openDoc, createDoc, copyDocument, copyPath, goHome, restoreDoc, archiveDoc, deleteDoc, toggleArchived])
 
   const runAction = useCallback((action: PaletteAction) => {
     setPaletteOpen(false)
@@ -250,6 +289,8 @@ export function App(): JSX.Element {
     .st-btn.active { background: ${hexA(settings.accent, 0.16)}; }
     .tag-add-input:focus, .path-input:focus { border-color: ${settings.accent}; }
     .save-dot.saving .d { background: ${settings.accent}; }
+    .entry-row.row-focused { box-shadow: inset 3px 0 0 ${settings.accent}; }
+    .context-item svg { color: var(--ink-3); }
     ${settings.showPreview ? '' : '.entry-preview { display: none; }'}
   `
 
@@ -271,6 +312,8 @@ export function App(): JSX.Element {
           onOpen={openDoc}
           onCreate={createDoc}
           onRestore={restoreDoc}
+          onArchive={archiveDoc}
+          onFocusEntry={setHomeFocusId}
           onOpenVault={() => window.flyt.openVault()}
         />
       )}

@@ -226,6 +226,64 @@ export function DocView({
     }
   }, [view])
 
+  // Track whether the editor was ever focused for this doc, so re-entering an
+  // untouched document drops the cursor at the end rather than the start.
+  const everFocused = useRef(false)
+  useEffect(() => {
+    everFocused.current = false
+  }, [doc.id])
+  useEffect(() => {
+    if (!view) return
+    const mark = (): void => {
+      everFocused.current = true
+    }
+    view.contentDOM.addEventListener('focus', mark)
+    return () => view.contentDOM.removeEventListener('focus', mark)
+  }, [view])
+
+  const refocusEditor = useCallback(() => {
+    if (!view) return
+    view.focus()
+    // CM keeps the last selection across blur; if the editor was never focused,
+    // drop the caret at the end of the document.
+    if (!everFocused.current) view.dispatch({ selection: { anchor: view.state.doc.length } })
+  }, [view])
+
+  // Esc/Enter focus flow: Esc leaves the editor canvas (cursor retained); a second
+  // Esc (focus outside, no field) goes back to the library. Enter from outside
+  // re-enters the editor at the last cursor (or end of an untouched doc).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (document.querySelector('.scrim')) return // overlays own their keys
+      const ae = document.activeElement as HTMLElement | null
+      const inEditor = !!view && view.hasFocus
+      const inTitle = !!ae && ae.classList.contains('doc-title')
+      const inInput = !!ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')
+
+      if (e.key === 'Escape') {
+        if (inEditor) {
+          e.preventDefault()
+          view!.contentDOM.blur()
+        } else if (inTitle) {
+          e.preventDefault()
+          ae!.blur()
+        } else if (inInput) {
+          // let the field's own Escape handler blur it
+        } else {
+          e.preventDefault()
+          onBack()
+        }
+      } else if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (!inEditor && !inTitle && !inInput) {
+          e.preventDefault()
+          refocusEditor()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [view, onBack, refocusEditor])
+
   return (
     <>
       <div className="bar doc-bar">

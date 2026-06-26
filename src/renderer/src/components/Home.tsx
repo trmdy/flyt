@@ -1,9 +1,10 @@
 // Home / library view: search, create, tag filter, archive toggle, entry rows.
 // Ported from the design's Gen-A FlytHome.
 
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Doc } from '@shared/types'
 import { Icon } from './Icon'
+import { ContextMenu } from './ContextMenu'
 import { excerpt, relDate, tagColor } from '../lib/md'
 
 function TagPill({ tag }: { tag: string }): JSX.Element {
@@ -26,6 +27,8 @@ interface HomeProps {
   onOpen: (id: string) => void
   onCreate: () => void
   onRestore: (id: string) => void
+  onArchive: (id: string) => void
+  onFocusEntry: (id: string | null) => void
   onOpenVault: () => void
 }
 
@@ -40,9 +43,16 @@ export function Home({
   onOpen,
   onCreate,
   onRestore,
+  onArchive,
+  onFocusEntry,
   onOpenVault
 }: HomeProps): JSX.Element {
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [focusIdx, setFocusIdx] = useState(-1)
+  const [menu, setMenu] = useState<{ doc: Doc; x: number; y: number } | null>(null)
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([])
+  const menuRef = useRef(false)
+  menuRef.current = !!menu
 
   useEffect(() => {
     setActiveTag(null)
@@ -77,6 +87,55 @@ export function Home({
       .slice()
       .sort((a, b) => b.modified - a.modified)
   }, [scoped, query, activeTag])
+
+  // Keep the focused index in range as the list changes.
+  useEffect(() => {
+    setFocusIdx((i) => (filtered.length === 0 ? -1 : Math.min(i, filtered.length - 1)))
+  }, [filtered.length])
+
+  // Report the focused document up (so ⌘K can surface its actions).
+  const focusedId = focusIdx >= 0 ? (filtered[focusIdx]?.id ?? null) : null
+  useEffect(() => {
+    onFocusEntry(focusedId)
+  }, [focusedId, onFocusEntry])
+
+  // Scroll the focused row into view.
+  useEffect(() => {
+    if (focusIdx >= 0) rowRefs.current[focusIdx]?.scrollIntoView({ block: 'nearest' })
+  }, [focusIdx])
+
+  // j/k + arrows move the focus; Enter opens. ArrowDown from the search box jumps
+  // into the list. Disabled while an overlay or the context menu is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (menuRef.current || document.querySelector('.scrim')) return
+      const inSearch = document.activeElement === searchRef.current
+      const move = (delta: number): void => {
+        e.preventDefault()
+        if (inSearch) searchRef.current?.blur()
+        setFocusIdx((i) => {
+          const n = filtered.length
+          if (n === 0) return -1
+          if (i < 0) return delta > 0 ? 0 : n - 1
+          return Math.max(0, Math.min(n - 1, i + delta))
+        })
+      }
+      if (e.key === 'ArrowDown') move(1)
+      else if (e.key === 'ArrowUp') move(-1)
+      else if (!inSearch && e.key === 'j') move(1)
+      else if (!inSearch && e.key === 'k') move(-1)
+      else if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+        const idx = focusIdx >= 0 ? focusIdx : inSearch ? 0 : -1
+        const d = idx >= 0 ? filtered[idx] : null
+        if (d) {
+          e.preventDefault()
+          onOpen(d.id)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [filtered, focusIdx, searchRef, onOpen])
 
   return (
     <>
@@ -170,8 +229,20 @@ export function Home({
               </div>
             </div>
           ) : (
-            filtered.map((d) => (
-              <div key={d.id} className="entry-row" onClick={() => onOpen(d.id)}>
+            filtered.map((d, i) => (
+              <div
+                key={d.id}
+                ref={(el) => {
+                  rowRefs.current[i] = el
+                }}
+                className={'entry-row' + (i === focusIdx ? ' row-focused' : '')}
+                onClick={() => onOpen(d.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setFocusIdx(i)
+                  setMenu({ doc: d, x: e.clientX, y: e.clientY })
+                }}
+              >
                 <div className="entry-main">
                   <div className="entry-title">{d.title || 'Untitled'}</div>
                   <div className="entry-preview">{excerpt(d.body, 150) || 'Empty document'}</div>
@@ -215,6 +286,20 @@ export function Home({
         <span className="sep">·</span>
         <span className="kbd">⌘K</span>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: 'Open', icon: 'arrow-corner', onSelect: () => onOpen(menu.doc.id) },
+            menu.doc.archived
+              ? { label: 'Restore', icon: 'check', onSelect: () => onRestore(menu.doc.id) }
+              : { label: 'Archive', icon: 'archive', onSelect: () => onArchive(menu.doc.id) }
+          ]}
+        />
+      )}
     </>
   )
 }
