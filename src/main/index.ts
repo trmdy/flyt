@@ -59,7 +59,19 @@ function createWindow(): void {
     }
   })
 
-  win.once('ready-to-show', () => win.show())
+  // Reveal once the renderer is ready. `ready-to-show` is the ideal signal but
+  // can fail to fire (e.g. a slow/blank first paint), which would leave the
+  // window hidden forever — so also reveal on did-finish-load and a last-resort
+  // timeout.
+  const reveal = (): void => {
+    if (!win.isDestroyed() && !win.isVisible()) {
+      win.show()
+      win.focus()
+    }
+  }
+  win.once('ready-to-show', reveal)
+  win.webContents.once('did-finish-load', () => setTimeout(reveal, 60))
+  setTimeout(reveal, 4000)
 
   // Remember size/position (debounced) so the app reopens where you left it.
   let saveTimer: ReturnType<typeof setTimeout> | null = null
