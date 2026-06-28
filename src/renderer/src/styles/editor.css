@@ -161,6 +161,28 @@
   text-decoration-color: var(--ink-4);
   cursor: text;
 }
+.flyt-cm .tok-link:hover {
+  text-decoration-color: var(--accent);
+}
+.flyt-cm .cm-list-bullet {
+  display: inline-block;
+  width: 0.9em;
+  color: var(--ink-3);
+}
+.flyt-cm .cm-image-widget {
+  display: block;
+  margin: 12px 0;
+  max-width: 100%;
+}
+.flyt-cm .cm-image-widget img {
+  display: block;
+  max-width: min(100%, 760px);
+  max-height: 520px;
+  border-radius: 6px;
+  border: 1px solid var(--hair);
+  background: var(--surface);
+  object-fit: contain;
+}
 /* Subtle markers when a line is "open" (cursor on it) — punctuation recedes. */
 .flyt-cm .tok-mark {
   color: var(--ink-4);

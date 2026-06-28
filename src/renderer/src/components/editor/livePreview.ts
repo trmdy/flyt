@@ -2,8 +2,8 @@
 // syntax markers on lines the cursor isn't on (Obsidian-style). Driven entirely
 // off the Lezer syntax tree; recomputed on doc, selection, and viewport changes.
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
-import type { Range } from '@codemirror/state'
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view'
+import type { Extension, Range } from '@codemirror/state'
 import { syntaxTree } from '@codemirror/language'
 
 const hidden = Decoration.replace({})
@@ -11,7 +11,6 @@ const strong = Decoration.mark({ class: 'tok-strong' })
 const em = Decoration.mark({ class: 'tok-em' })
 const strike = Decoration.mark({ class: 'tok-strike' })
 const code = Decoration.mark({ class: 'tok-code' })
-const linkText = Decoration.mark({ class: 'tok-link' })
 const markDim = Decoration.mark({ class: 'tok-mark' })
 const listMarkDim = Decoration.mark({ class: 'tok-list-mark' })
 
@@ -22,6 +21,105 @@ const headingLine = [
 ]
 const quoteLine = Decoration.line({ class: 'cm-quote-line' })
 const codeblockLine = Decoration.line({ class: 'cm-codeblock-line' })
+
+interface PreviewContext {
+  vaultPath: string
+  docFile: string
+}
+
+interface LivePreviewOptions {
+  getContext: () => PreviewContext
+  openLink: (href: string) => void
+}
+
+class BulletWidget extends WidgetType {
+  toDOM(): HTMLElement {
+    const span = document.createElement('span')
+    span.className = 'cm-list-bullet'
+    span.textContent = '•'
+    return span
+  }
+
+  eq(widget: WidgetType): boolean {
+    return widget instanceof BulletWidget
+  }
+
+  ignoreEvent(): boolean {
+    return false
+  }
+}
+
+class ImageWidget extends WidgetType {
+  constructor(
+    private readonly src: string,
+    private readonly alt: string
+  ) {
+    super()
+  }
+
+  toDOM(): HTMLElement {
+    const wrap = document.createElement('span')
+    wrap.className = 'cm-image-widget'
+    const img = document.createElement('img')
+    img.src = this.src
+    img.alt = this.alt
+    img.loading = 'lazy'
+    wrap.appendChild(img)
+    return wrap
+  }
+
+  eq(widget: WidgetType): boolean {
+    return widget instanceof ImageWidget && widget.src === this.src && widget.alt === this.alt
+  }
+
+  ignoreEvent(): boolean {
+    return false
+  }
+}
+
+function fileUrlFromAbsolutePath(path: string): string {
+  const normalized = path.replace(/\\/g, '/')
+  const parts = normalized.split('/').map((part) => encodeURIComponent(part))
+  if (/^[A-Za-z]:\//.test(normalized)) {
+    parts[0] = parts[0].replace('%3A', ':')
+    return `file:///${parts.join('/')}`
+  }
+  return `file://${parts.join('/')}`
+}
+
+function docDirectoryPath(ctx: PreviewContext): string {
+  const vault = (ctx.vaultPath || '').replace(/\\/g, '/').replace(/\/+$/, '')
+  const parts = (ctx.docFile || '').replace(/\\/g, '/').split('/').filter(Boolean)
+  parts.pop()
+  return parts.length ? `${vault}/${parts.join('/')}/` : `${vault}/`
+}
+
+function resolveMarkdownUrl(raw: string, ctx: PreviewContext): string | null {
+  const url = raw.trim().replace(/^<|>$/g, '')
+  if (!url) return null
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url
+  if (/^[A-Za-z]:[\\/]/.test(url) || url.startsWith('/')) return fileUrlFromAbsolutePath(url)
+
+  try {
+    return new URL(url.replace(/\\/g, '/'), fileUrlFromAbsolutePath(docDirectoryPath(ctx))).href
+  } catch {
+    return null
+  }
+}
+
+function linkDecoration(href: string): Decoration {
+  return Decoration.mark({
+    tagName: 'span',
+    class: 'tok-link',
+    attributes: {
+      'data-flyt-href': href
+    }
+  })
+}
+
+function imageAlt(markdown: string): string {
+  return /^!\[([^\]]*)\]/.exec(markdown)?.[1]?.trim() || 'image'
+}
 
 function activeLines(view: EditorView): Set<number> {
   const set = new Set<number>()
@@ -36,7 +134,7 @@ function activeLines(view: EditorView): Set<number> {
 
 const NO_ACTIVE_LINES: Set<number> = new Set()
 
-function build(view: EditorView): DecorationSet {
+function build(view: EditorView, options: LivePreviewOptions): DecorationSet {
   const { state } = view
   const { doc } = state
   // When the editor isn't focused, render everything cleanly (hide all markers).
@@ -97,15 +195,43 @@ function build(view: EditorView): DecorationSet {
             hideOrDim(node.from, node.to, true)
             return
           case 'ListMark':
-            out.push(listMarkDim.range(node.from, node.to))
+            if (active.has(doc.lineAt(node.from).number)) {
+              out.push(listMarkDim.range(node.from, node.to))
+            } else {
+              const marker = state.sliceDoc(node.from, node.to)
+              if (/^\d+[.)]$/.test(marker)) out.push(listMarkDim.range(node.from, node.to))
+              else out.push(Decoration.replace({ widget: new BulletWidget() }).range(node.from, node.to))
+            }
             return
-          case 'Link':
-            out.push(linkText.range(node.from, node.to))
+          case 'Link': {
+            const urlNode = node.node.getChild('URL')
+            if (urlNode) {
+              const href = resolveMarkdownUrl(state.sliceDoc(urlNode.from, urlNode.to), options.getContext())
+              if (href) out.push(linkDecoration(href).range(node.from, node.to))
+            }
+            return
+          }
+          case 'Image': {
+            const line = doc.lineAt(node.from)
+            if (active.has(line.number)) return
+            const urlNode = node.node.getChild('URL')
+            if (!urlNode) return false
+            const src = resolveMarkdownUrl(state.sliceDoc(urlNode.from, urlNode.to), options.getContext())
+            if (!src) return false
+            out.push(
+              Decoration.replace({
+                widget: new ImageWidget(src, imageAlt(state.sliceDoc(node.from, node.to)))
+              }).range(node.from, node.to)
+            )
+            return false
+          }
+          case 'LinkTitle':
+            hideOrDim(node.from, node.to)
             return
           case 'LinkMark':
           case 'URL': {
             const parent = node.node.parent
-            if (parent && parent.name === 'Link') hideOrDim(node.from, node.to)
+            if (parent && (parent.name === 'Link' || parent.name === 'Image')) hideOrDim(node.from, node.to)
             return
           }
           case 'FencedCode':
@@ -125,16 +251,33 @@ function build(view: EditorView): DecorationSet {
   return Decoration.set(out, true)
 }
 
-export const livePreview = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet
-    constructor(view: EditorView) {
-      this.decorations = build(view)
-    }
-    update(u: ViewUpdate): void {
-      if (u.docChanged || u.selectionSet || u.viewportChanged || u.focusChanged)
-        this.decorations = build(u.view)
-    }
-  },
-  { decorations: (v) => v.decorations }
-)
+export function livePreview(options: LivePreviewOptions): Extension {
+  return [
+    ViewPlugin.fromClass(
+      class {
+        decorations: DecorationSet
+        constructor(view: EditorView) {
+          this.decorations = build(view, options)
+        }
+        update(u: ViewUpdate): void {
+          if (u.docChanged || u.selectionSet || u.viewportChanged || u.focusChanged || u.transactions.length > 0)
+            this.decorations = build(u.view, options)
+        }
+      },
+      { decorations: (v) => v.decorations }
+    ),
+    EditorView.domEventHandlers({
+      click(event, view) {
+        const target = event.target as HTMLElement | null
+        const link = target?.closest<HTMLElement>('[data-flyt-href]')
+        if (!link || !view.contentDOM.contains(link)) return false
+        if (!event.metaKey && !event.ctrlKey) return false
+        const href = link.dataset.flytHref
+        if (!href) return false
+        event.preventDefault()
+        options.openLink(href)
+        return true
+      }
+    })
+  ]
+}

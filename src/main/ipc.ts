@@ -3,7 +3,8 @@
 
 import { app, BrowserWindow, ipcMain, clipboard, shell } from 'electron'
 import { watch, type FSWatcher } from 'node:fs'
-import type { Doc, DocPatch, Settings, VaultSnapshot } from '@shared/types'
+import { fileURLToPath } from 'node:url'
+import type { AssetInput, Doc, DocPatch, Settings, VaultSnapshot } from '@shared/types'
 import { loadSettings, saveSettings, vaultAbsPath } from './config'
 import * as vault from './vault'
 
@@ -43,6 +44,27 @@ function scheduleVaultChanged(): void {
     vaultChangeTimer = null
     sendVaultChanged()
   }, VAULT_CHANGE_DEBOUNCE_MS)
+}
+
+async function openLink(raw: string): Promise<void> {
+  const target = String(raw ?? '').trim()
+  if (!target || target.startsWith('#')) return
+
+  let url: URL
+  try {
+    url = new URL(target)
+  } catch {
+    return
+  }
+
+  if (url.protocol === 'file:') {
+    await shell.openPath(fileURLToPath(url))
+    return
+  }
+
+  if (['http:', 'https:', 'mailto:', 'tel:'].includes(url.protocol)) {
+    await shell.openExternal(url.toString())
+  }
 }
 
 function stopVaultWatcher(): void {
@@ -110,6 +132,8 @@ export function registerIpc(): void {
   ipcMain.handle('flyt:copyText', (_e, text: string) => {
     clipboard.writeText(String(text ?? ''))
   })
+  ipcMain.handle('flyt:saveAsset', (_e, docId: string, asset: AssetInput) => vault.saveAsset(docId, asset))
+  ipcMain.handle('flyt:openLink', (_e, url: string) => openLink(url))
   ipcMain.handle('flyt:openVault', () => {
     const dir = vault.ensureVault()
     return shell.openPath(dir)

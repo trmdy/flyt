@@ -12,16 +12,29 @@ import {
   existsSync,
   mkdirSync,
   copyFileSync,
+  rmSync,
   utimesSync
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, extname, join, relative } from 'node:path'
 import matter from 'gray-matter'
-import type { Doc, DocPatch, MigrateResult } from '@shared/types'
+import type { AssetInput, Doc, DocPatch, MigrateResult, SavedAsset } from '@shared/types'
 import { vaultAbsPath, setVaultPath, expandTilde, seededVaults, markSeeded } from './config'
 import { SEED_DOCS } from './seed'
 
 // id -> current filename slug, rebuilt on every scan and kept fresh on writes.
 const indexById = new Map<string, string>()
+const ASSETS_DIR = '_assets'
+const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'jpg', 'jpeg', 'png', 'svg', 'tif', 'tiff', 'webp'])
+const MIME_EXTENSIONS: Record<string, string> = {
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/svg+xml': 'svg',
+  'image/tiff': 'tiff',
+  'image/webp': 'webp'
+}
 
 function uid(): string {
   return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -63,6 +76,144 @@ export function ensureVault(): string {
   const dir = vaultAbsPath()
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+function pathSegments(file: string): string[] {
+  return (file || 'untitled')
+    .replace(/\.md$/i, '')
+    .split(/[\\/]+/)
+    .map((segment) =>
+      segment
+        .trim()
+        .replace(/[<>:"|?*\x00-\x1f]/g, '-')
+        .replace(/^\.+$/, '')
+    )
+    .filter(Boolean)
+}
+
+function assetSegmentsForDoc(file: string): string[] {
+  const segments = pathSegments(file)
+  return segments.length ? segments : ['untitled']
+}
+
+function extensionForAsset(asset: AssetInput): string {
+  const mime = (asset.mimeType || '').toLowerCase().split(';')[0].trim()
+  const namedExt = extname(asset.name || '').slice(1).toLowerCase()
+  if (IMAGE_EXTENSIONS.has(namedExt)) return namedExt === 'jpeg' ? 'jpg' : namedExt
+  return MIME_EXTENSIONS[mime] || 'png'
+}
+
+function isImageAsset(asset: AssetInput): boolean {
+  const mime = (asset.mimeType || '').toLowerCase().split(';')[0].trim()
+  const namedExt = extname(asset.name || '').slice(1).toLowerCase()
+  return mime.startsWith('image/') || IMAGE_EXTENSIONS.has(namedExt)
+}
+
+function assetBuffer(data: AssetInput['data']): Buffer {
+  if (data instanceof ArrayBuffer) return Buffer.from(data)
+  if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+  throw new Error('Unsupported asset data')
+}
+
+function uniqueAssetName(dir: string, ext: string): string {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-')
+  let n = 0
+  while (true) {
+    const suffix = n === 0 ? '' : `-${n + 1}`
+    const name = `pasted-image-${stamp}${suffix}.${ext}`
+    if (!existsSync(join(dir, name))) return name
+    n++
+  }
+}
+
+function countFiles(dir: string): number {
+  let count = 0
+  let names: string[]
+  try {
+    names = readdirSync(dir)
+  } catch {
+    return 1
+  }
+  for (const name of names) {
+    const full = join(dir, name)
+    try {
+      const stat = statSync(full)
+      if (stat.isDirectory()) count += countFiles(full)
+      else if (stat.isFile()) count++
+    } catch {
+      count++
+    }
+  }
+  return count
+}
+
+function copyDirNoClobber(from: string, to: string): { moved: number; failed: number } {
+  mkdirSync(to, { recursive: true })
+  let moved = 0
+  let failed = 0
+  let names: string[]
+
+  try {
+    names = readdirSync(from)
+  } catch {
+    return { moved: 0, failed: 1 }
+  }
+
+  for (const name of names) {
+    const src = join(from, name)
+    const dest = join(to, name)
+    let stat
+    try {
+      stat = statSync(src)
+    } catch {
+      failed++
+      continue
+    }
+
+    if (stat.isDirectory()) {
+      const res = copyDirNoClobber(src, dest)
+      moved += res.moved
+      failed += res.failed
+    } else if (stat.isFile()) {
+      if (existsSync(dest)) {
+        failed++
+      } else {
+        try {
+          copyFileSync(src, dest)
+          moved++
+        } catch {
+          failed++
+        }
+      }
+    }
+  }
+
+  return { moved, failed }
+}
+
+function moveAssetsRoot(oldAbs: string, newAbs: string): { moved: number; failed: number } {
+  const from = join(oldAbs, ASSETS_DIR)
+  if (!existsSync(from)) return { moved: 0, failed: 0 }
+
+  const to = join(newAbs, ASSETS_DIR)
+  if (!existsSync(to)) {
+    try {
+      renameSync(from, to)
+      return { moved: countFiles(to), failed: 0 }
+    } catch {
+      // Cross-device or permission issue — fall through to copy/remove.
+    }
+  }
+
+  const res = copyDirNoClobber(from, to)
+  if (res.failed === 0) {
+    try {
+      rmSync(from, { recursive: true, force: true })
+    } catch {
+      res.failed++
+    }
+  }
+  return res
 }
 
 function docFromFile(dir: string, filename: string): Doc | null {
@@ -273,7 +424,32 @@ export function docPath(id: string): string | null {
   return existsSync(full) ? full : null
 }
 
-/** Move every `.md` from the current vault to a new location and repoint config. */
+export function saveAsset(docId: string, asset: AssetInput): SavedAsset {
+  const dir = ensureVault()
+  if (!indexById.has(docId)) scan()
+  const file = indexById.get(docId)
+  if (file == null) throw new Error('Document not found')
+  if (!isImageAsset(asset)) throw new Error('Only image assets are supported')
+
+  const buffer = assetBuffer(asset.data)
+  if (buffer.length === 0) throw new Error('Empty asset')
+
+  const docSegments = assetSegmentsForDoc(file)
+  const assetDir = join(dir, ASSETS_DIR, ...docSegments)
+  mkdirSync(assetDir, { recursive: true })
+
+  const ext = extensionForAsset(asset)
+  const filename = uniqueAssetName(assetDir, ext)
+  const full = join(assetDir, filename)
+  writeFileSync(full, buffer)
+
+  const docFullPath = join(dir, ...docSegments) + '.md'
+  const markdownPath = relative(dirname(docFullPath), full).replace(/\\/g, '/')
+
+  return { filename, markdownPath }
+}
+
+/** Move every `.md` and the vault asset folder to a new location and repoint config. */
 export function migrateVault(rawNewPath: string): MigrateResult {
   const oldAbs = vaultAbsPath()
   const newDisplay = (rawNewPath || '').trim().replace(/[/\\]+$/, '')
@@ -331,6 +507,10 @@ export function migrateVault(rawNewPath: string): MigrateResult {
       }
     }
   }
+
+  const assetMove = moveAssetsRoot(oldAbs, newAbs)
+  moved += assetMove.moved
+  failed += assetMove.failed
 
   setVaultPath(newDisplay)
   // The destination is already considered "seeded" — don't drop samples into it.

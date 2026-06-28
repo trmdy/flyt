@@ -9,6 +9,7 @@ import type { SyntaxNode } from '@lezer/common'
 
 export type InlineKind = 'bold' | 'italic' | 'code' | 'strike'
 export type Action = InlineKind | 'link' | 'quote' | 'list'
+type IndentDirection = 'in' | 'out'
 
 const INLINE_NODE: Record<InlineKind, string> = {
   bold: 'StrongEmphasis',
@@ -131,6 +132,38 @@ export function toggleLinePrefix(view: EditorView, kind: 'quote' | 'list'): void
       changes.push({ from: l.from, insert: prefix })
     }
   }
+  if (changes.length) view.dispatch({ changes })
+  view.focus()
+}
+
+function selectedLines(state: EditorState): number[] {
+  const lines = new Set<number>()
+  for (const range of state.selection.ranges) {
+    let to = range.to
+    if (!range.empty && to > range.from && to <= state.doc.length && to === state.doc.lineAt(to).from) to--
+    const startLine = state.doc.lineAt(range.from).number
+    const endLine = state.doc.lineAt(to).number
+    for (let n = startLine; n <= endLine; n++) lines.add(n)
+  }
+  return Array.from(lines).sort((a, b) => a - b)
+}
+
+export function indentLines(view: EditorView, direction: IndentDirection): void {
+  const { state } = view
+  const changes: ChangeSpec[] = []
+
+  for (const n of selectedLines(state)) {
+    const line = state.doc.line(n)
+    if (direction === 'in') {
+      changes.push({ from: line.from, insert: '  ' })
+      continue
+    }
+
+    if (line.text.startsWith('  ')) changes.push({ from: line.from, to: line.from + 2, insert: '' })
+    else if (line.text.startsWith('\t') || line.text.startsWith(' '))
+      changes.push({ from: line.from, to: line.from + 1, insert: '' })
+  }
+
   if (changes.length) view.dispatch({ changes })
   view.focus()
 }

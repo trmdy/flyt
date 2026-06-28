@@ -59,6 +59,17 @@ export interface MigrateResult {
   error?: string
 }
 
+export interface AssetInput {
+  name?: string
+  mimeType?: string
+  data: ArrayBuffer | Uint8Array
+}
+
+export interface SavedAsset {
+  filename: string
+  markdownPath: string
+}
+
 /** The API surface exposed on `window.flyt` by the preload bridge. */
 export interface FlytApi {
   getSnapshot(): Promise<VaultSnapshot>
@@ -72,6 +83,10 @@ export interface FlytApi {
   docPath(id: string): Promise<string | null>
   /** Write arbitrary text to the system clipboard (via the main process). */
   copyText(text: string): Promise<void>
+  /** Save a pasted asset next to a document and return the Markdown path to it. */
+  saveAsset(docId: string, asset: AssetInput): Promise<SavedAsset>
+  /** Open a Markdown link in the OS/browser. */
+  openLink(url: string): Promise<void>
   /** Reveal the vault folder in the OS file manager. */
   openVault(): Promise<void>
   /** Subscribe to local vault filesystem changes. Returns an unsubscribe function. */

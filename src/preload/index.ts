@@ -14,6 +14,8 @@ const api: FlytApi = {
   setSettings: (patch: Partial<Settings>) => ipcRenderer.invoke('flyt:setSettings', patch),
   docPath: (id: string) => ipcRenderer.invoke('flyt:docPath', id),
   copyText: (text: string) => ipcRenderer.invoke('flyt:copyText', text),
+  saveAsset: (docId, asset) => ipcRenderer.invoke('flyt:saveAsset', docId, asset),
+  openLink: (url) => ipcRenderer.invoke('flyt:openLink', url),
   openVault: () => ipcRenderer.invoke('flyt:openVault'),
   onVaultChanged: (callback) => {
     const listener = (): void => callback()

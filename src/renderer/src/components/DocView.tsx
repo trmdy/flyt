@@ -350,6 +350,7 @@ interface DocViewProps {
 export function DocView({
   doc,
   vault,
+  vaultPath,
   saving,
   allTags,
   onBack,
@@ -578,6 +579,7 @@ export function DocView({
           <CodeMirrorEditor
             key={doc.id}
             doc={doc}
+            vaultPath={vaultPath}
             onChange={(md) => onPatch({ body: md })}
             onViewReady={setView}
             onModeChange={setVimModeState}
