@@ -16,6 +16,7 @@ export interface VaultStore {
   docs: Doc[]
   createDoc: () => Promise<string>
   updateDoc: (id: string, patch: DocPatch) => void
+  upsertDoc: (doc: Doc) => Promise<void>
   deleteDoc: (id: string) => Promise<void>
   setSettings: (patch: Partial<Settings>) => void
   migrateVault: (path: string) => Promise<MigrateResult>
@@ -26,14 +27,67 @@ export function useVault(): VaultStore {
   const [snap, setSnap] = useState<VaultSnapshot | null>(null)
   const pending = useRef<Map<string, DocPatch>>(new Map())
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const writesInFlight = useRef(0)
+  const reloadQueued = useRef(false)
+  const reloading = useRef(false)
 
   const reload = useCallback(async () => {
-    setSnap(await window.flyt.getSnapshot())
+    if (reloading.current) {
+      reloadQueued.current = true
+      return
+    }
+
+    reloading.current = true
+    try {
+      do {
+        reloadQueued.current = false
+        setSnap(await window.flyt.getSnapshot())
+      } while (reloadQueued.current && pending.current.size === 0 && writesInFlight.current === 0)
+    } finally {
+      reloading.current = false
+    }
   }, [])
+
+  const reloadFromDiskChange = useCallback(async () => {
+    if (pending.current.size > 0 || writesInFlight.current > 0) {
+      reloadQueued.current = true
+      return
+    }
+    await reload()
+  }, [reload])
+
+  const runQueuedReload = useCallback(() => {
+    if (!reloadQueued.current) return
+    if (pending.current.size > 0 || writesInFlight.current > 0) return
+    reloadQueued.current = false
+    void reload()
+  }, [reload])
 
   useEffect(() => {
     reload()
   }, [reload])
+
+  useEffect(() => {
+    return window.flyt.onVaultChanged(() => {
+      void reloadFromDiskChange()
+    })
+  }, [reloadFromDiskChange])
+
+  useEffect(() => {
+    const onFocus = (): void => {
+      void reloadFromDiskChange()
+    }
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') void reloadFromDiskChange()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [reloadFromDiskChange])
 
   const flush = useCallback(async (id: string) => {
     const patch = pending.current.get(id)
@@ -41,7 +95,8 @@ export function useVault(): VaultStore {
     if (!patch) return
     pending.current.delete(id)
 
-    let saved
+    let saved: Doc | null
+    writesInFlight.current += 1
     try {
       saved = await window.flyt.updateDoc(id, patch)
     } catch {
@@ -50,6 +105,9 @@ export function useVault(): VaultStore {
       pending.current.set(id, { ...patch, ...(pending.current.get(id) || {}) })
       if (!timers.current.has(id)) timers.current.set(id, setTimeout(() => flush(id), 1000))
       return
+    } finally {
+      writesInFlight.current = Math.max(0, writesInFlight.current - 1)
+      runQueuedReload()
     }
     if (!saved) return
 
@@ -99,6 +157,20 @@ export function useVault(): VaultStore {
     const doc = await window.flyt.createDoc()
     setSnap((s) => (s ? { ...s, docs: [doc, ...s.docs] } : s))
     return doc.id
+  }, [])
+
+  const upsertDoc = useCallback(async (doc: Doc) => {
+    const saved = await window.flyt.upsertDoc(doc)
+    setSnap((s) => {
+      if (!s) return s
+      const exists = s.docs.some((d) => d.id === saved.id)
+      return {
+        ...s,
+        docs: exists
+          ? s.docs.map((d) => (d.id === saved.id ? { ...d, ...saved } : d))
+          : [saved, ...s.docs]
+      }
+    })
   }, [])
 
   const deleteDoc = useCallback(async (id: string) => {
@@ -153,6 +225,7 @@ export function useVault(): VaultStore {
     docs: snap?.docs ?? [],
     createDoc,
     updateDoc,
+    upsertDoc,
     deleteDoc,
     setSettings,
     migrateVault,

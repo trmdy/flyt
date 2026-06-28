@@ -221,6 +221,36 @@ export function updateDoc(id: string, patch: DocPatch): Doc | null {
   return docFromFile(dir, targetFile + '.md') ?? next
 }
 
+export function upsertDoc(input: Doc): Doc {
+  const dir = ensureVault()
+  if (!indexById.has(input.id)) scan()
+
+  const currentFile = indexById.get(input.id)
+  const file = ensureUniqueFile(input.file || input.title || 'untitled', input.id)
+  const now = Date.now()
+  const doc: Doc = {
+    id: input.id,
+    file,
+    title: input.title,
+    tags: normalizeTags(input.tags),
+    body: input.body,
+    created: input.created || now,
+    modified: input.modified || now,
+    archived: input.archived === true
+  }
+
+  atomicWrite(join(dir, file + '.md'), serialize(doc))
+  if (currentFile && currentFile !== file) {
+    try {
+      unlinkSync(join(dir, currentFile + '.md'))
+    } catch {
+      // old file already gone — fine.
+    }
+  }
+  indexById.set(doc.id, file)
+  return docFromFile(dir, file + '.md') ?? doc
+}
+
 export function deleteDoc(id: string): { ok: boolean } {
   const dir = ensureVault()
   if (!indexById.has(id)) scan()

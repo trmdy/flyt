@@ -360,6 +360,7 @@ export function DocView({
 }: DocViewProps): JSX.Element {
   const titleRef = useRef<HTMLDivElement>(null)
   const loadedId = useRef<string | null>(null)
+  const titleFocused = useRef(false)
   const [view, setView] = useState<EditorView | null>(null)
   const [tagSignal, setTagSignal] = useState(0)
   const [vimMode, setVimModeState] = useState<VimMode>('normal')
@@ -394,11 +395,13 @@ export function DocView({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Load the title into the contentEditable only when the document changes.
+  // Keep the non-React contentEditable in step with document reloads, but do not
+  // rewrite it while the user is actively editing the title.
   useEffect(() => {
-    if (loadedId.current !== doc.id && titleRef.current) {
+    const title = doc.title || ''
+    if (titleRef.current && (loadedId.current !== doc.id || !titleFocused.current)) {
       loadedId.current = doc.id
-      titleRef.current.textContent = doc.title || ''
+      if (titleRef.current.textContent !== title) titleRef.current.textContent = title
     }
   }, [doc.id, doc.title])
 
@@ -547,6 +550,14 @@ export function DocView({
             contentEditable
             suppressContentEditableWarning
             data-ph="Untitled"
+            onFocus={() => {
+              titleFocused.current = true
+            }}
+            onBlur={() => {
+              titleFocused.current = false
+              const title = doc.title || ''
+              if (titleRef.current && titleRef.current.textContent !== title) titleRef.current.textContent = title
+            }}
             onInput={onTitleInput}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

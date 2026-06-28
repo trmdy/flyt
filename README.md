@@ -44,7 +44,8 @@ calm, keyboard-first surface for writing them.
 
 ## Architecture
 
-A single Electron app — no server, no network.
+A single Electron app by default — no server, no network unless optional Flyt sync
+is configured.
 
 ```
 src/
@@ -61,6 +62,8 @@ design/        # the original Claude Design handoff, kept for provenance
   `migrateVault`, `setSettings`, `copyText`, `openVault`).
 - **Renderer** is optimistic: edits land in local state instantly and disk writes are
   debounced/coalesced, so typing never waits on the filesystem.
+- **Optional sync** uses Convex + Better Auth + Trestle Replicate. Local Markdown
+  remains the durable mirror; sync can be disabled by leaving cloud env vars unset.
 - **Vault layout** is flat:
 
   ```
@@ -163,3 +166,9 @@ Electron · React 18 · TypeScript · electron-vite · CodeMirror 6 · gray-matt
 Geist / Geist Mono / Newsreader (bundled offline via Fontsource).
 
 See [`PRD.md`](./PRD.md) for the product thinking.
+
+## Optional Sync Backend
+
+The first sync/auth backend foundation lives in `convex/` and is documented in
+[`docs/sync-auth.md`](./docs/sync-auth.md). It is intentionally scoped to
+personal/single-tenant sync first; billing and paid multi-tenant scoping come later.

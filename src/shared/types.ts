@@ -64,6 +64,7 @@ export interface FlytApi {
   getSnapshot(): Promise<VaultSnapshot>
   createDoc(): Promise<Doc>
   updateDoc(id: string, patch: DocPatch): Promise<Doc | null>
+  upsertDoc(doc: Doc): Promise<Doc>
   deleteDoc(id: string): Promise<{ ok: boolean }>
   migrateVault(newPath: string): Promise<MigrateResult>
   setSettings(patch: Partial<Settings>): Promise<Settings>
@@ -73,6 +74,8 @@ export interface FlytApi {
   copyText(text: string): Promise<void>
   /** Reveal the vault folder in the OS file manager. */
   openVault(): Promise<void>
+  /** Subscribe to local vault filesystem changes. Returns an unsubscribe function. */
+  onVaultChanged(callback: () => void): () => void
   platform: Platform
 }
 

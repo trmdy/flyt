@@ -7,6 +7,7 @@ import { Dialog } from '@base-ui-components/react/dialog'
 import * as stylex from '@stylexjs/stylex'
 import type { MigrateResult } from '@shared/types'
 import { Icon } from './Icon'
+import { CloudAccount } from './CloudAccount'
 import { color, font, radius } from '../styles/tokens.stylex'
 
 interface SettingsProps {
@@ -252,6 +253,7 @@ export function Settings({ vault, docsCount, onClose, onMigrate }: SettingsProps
                   Every Flyt document lives in this folder. Changing the location moves the entire
                   vault — all {docsCount} {docsCount === 1 ? 'document' : 'documents'} — to the new path.
                 </p>
+                <CloudAccount />
                 <div {...stylex.props(s.foot)}>
                   <button {...stylex.props(s.btnGhost)} onClick={onClose}>
                     Cancel

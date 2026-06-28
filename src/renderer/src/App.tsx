@@ -11,7 +11,9 @@ import { Home } from './components/Home'
 import { DocView } from './components/DocView'
 import { Palette, type PaletteAction } from './components/Palette'
 import { Settings } from './components/Settings'
+import { CloudSyncBridge } from './components/CloudSyncBridge'
 import { Icon } from './components/Icon'
+import { cloudEnabled } from './lib/cloud'
 import { color, font, motion } from './styles/tokens.stylex'
 
 interface Toast {
@@ -100,6 +102,7 @@ export function App(): JSX.Element {
   const {
     createDoc: vaultCreate,
     updateDoc: vaultUpdate,
+    upsertDoc: vaultUpsert,
     deleteDoc: vaultDelete,
     migrateVault: vaultMigrate
   } = store
@@ -359,6 +362,7 @@ export function App(): JSX.Element {
   return (
     <div {...stylex.props(appS.app)} style={rootVars}>
       <style dangerouslySetInnerHTML={{ __html: dynCss }} />
+      {cloudEnabled && <CloudSyncBridge docs={docs} upsertDoc={vaultUpsert} deleteDoc={vaultDelete} />}
 
       {view === 'home' && (
         <Home
